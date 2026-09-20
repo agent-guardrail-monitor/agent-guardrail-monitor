@@ -6,6 +6,7 @@ import {
   saveSnapshot
 } from "./core.mjs";
 import { proveInstalled } from "./prove.mjs";
+import { runEnforcementCommand } from "./enforcement/cli.mjs";
 
 const DEFAULT_DIR = ".agent-guardrail-monitor";
 
@@ -87,6 +88,10 @@ Usage:
   agm baseline [--cwd DIR] [--out FILE] [--prove] [--live]
   agm diff BASELINE CURRENT [--json]
   agm gate --baseline FILE [--cwd DIR] [--prove] [--live] [--json]
+  agm policy validate|compile|check ...
+  agm hook --runtime RUNTIME --policy POLICY.json
+  agm install-hook --runtime claude|copilot|codex [--cwd DIR] [--policy POLICY.json]
+  agm audit verify --file AUDIT.jsonl
 
 Rules:
   PASS     execution or static evidence supports the control.
@@ -114,6 +119,9 @@ export async function main(args) {
     help();
     return;
   }
+
+  const enforcementHandled = await runEnforcementCommand(command, rest);
+  if (enforcementHandled) return;
 
   if (command === "doctor") {
     const snapshot = await makeSnapshot(rest);

@@ -2,7 +2,7 @@
 
 **Independent guardrail verification for AI coding-agent updates.**
 
-Agent Guardrail Monitor is a vendor-neutral GitHub App and CLI that verifies the controls around Claude Code, OpenAI Codex, and GitHub Copilot CLI, then surfaces regressions when a later runtime or configuration state loses a control that previously existed.
+Agent Guardrail Monitor is a vendor-neutral GitHub App and CLI that verifies the controls around Claude Code, OpenAI Codex, and GitHub Copilot CLI, surfaces regressions when a later runtime or configuration state loses a control that previously existed, and in v0.2-alpha adds deterministic pre-action policy enforcement on runtime surfaces that expose a usable blocking hook.
 
 **Free GitHub App:** [Install Agent Guardrail Monitor](https://github.com/apps/agent-guardrail-monitor)
 
@@ -17,6 +17,33 @@ Coding agents update quickly. Their hook schemas, trust models, event names, set
 A configuration file can still exist while the protection behind it is no longer active.
 
 Agent Guardrail Monitor creates a baseline and compares later states against it.
+
+## v0.2-alpha enforcement
+
+The enforcement layer is external to the model. It includes:
+
+- versioned Directive, Memory, Skill, Tool, Task State and Policy registries;
+- a conservative Instruction Compiler that refuses to activate unvalidated natural-language directives;
+- Memory Resolver, Skill Resolver and Tool Router;
+- deterministic Policy Engine with `ALLOW`, `BLOCK`, `REQUIRE_REVIEW` and `UNKNOWN`;
+- Route Guard;
+- Evidence Gate and Execution Verifier;
+- Output Validator;
+- Drift Monitor;
+- tamper-evident hash-chained local audit log;
+- local `PreToolUse` adapters for Claude Code and GitHub Copilot;
+- a generic controlled-execution gateway primitive for application-owned tool loops.
+
+Install enforcement into a project:
+
+```bash
+agm install-hook --runtime claude
+agm install-hook --runtime copilot
+```
+
+Codex installation intentionally returns `UNKNOWN` until the exact runtime/version blocking path has current proof.
+
+See [Enforcement installation](docs/INSTALL-ENFORCEMENT-v0.2.md) and [Architecture](docs/ARCHITECTURE-ENFORCEMENT-v0.2.md).
 
 ```text
 Claude Code  2.1.263 -> 2.1.264
@@ -34,7 +61,18 @@ REGRESSION: HOOK_EVENT_REMOVED
 | OpenAI Codex | Yes | Experimental live canary |
 | GitHub Copilot CLI | Yes | Experimental live canary |
 
-Static inspection never calls a model and is covered by the automated v0.1 test suite.
+Static inspection never calls a model and is covered by the automated test suite.
+
+### Enforcement surface status
+
+| Surface | Pre-action block | Current AGM status |
+| --- | --- | --- |
+| Claude Code `PreToolUse` command hook | Vendor supports deny/block | Adapter + installer implemented; provider timeout path is fail-open |
+| GitHub Copilot `preToolUse` command hook | Vendor supports deny/block | Adapter + installer implemented; provider timeout path is fail-open |
+| OpenAI application-owned function tools | Controllable in owned orchestration path | Generic gateway primitive implemented; provider-specific beta adapter pending |
+| Gemini application-owned function calling | Client executes function | Generic gateway primitive implemented; provider-specific beta adapter pending |
+| Codex | Version/path dependent | `UNKNOWN` for enforcement installation until a current blocking canary passes |
+| Ordinary ChatGPT plugin/app surface | No universal interception API established | Integration surface only; not represented as a universal enforcement boundary |
 
 The live canary code is included for early adopters, but it has not been executed on the current release machine because those vendor CLIs are not installed there. Codex and Copilot live proof also requires `--live` because a real CLI session may consume the user's existing service quota.
 
@@ -57,7 +95,7 @@ npm link
 agm doctor
 ```
 
-The current public distribution installs directly from GitHub. An npm publication is not required to use v0.1.
+The public distribution installs directly from GitHub. An npm publication is not required; v0.2-alpha remains a pre-release until its release tag is published.
 
 ## Fast path
 
@@ -83,6 +121,39 @@ A detected regression exits non-zero and can block CI or rollout.
 
 ## Commands
 
+### `agm install-hook`
+
+Installs the local enforcement point without replacing unrelated runtime configuration:
+
+```bash
+agm install-hook --runtime claude
+agm install-hook --runtime copilot
+agm install-hook --runtime codex
+```
+
+Claude and Copilot return an installation record. Codex returns `UNKNOWN` in v0.2-alpha.
+
+### `agm policy`
+
+Validates, compiles, or evaluates structured policy:
+
+```bash
+agm policy validate --file policy.json
+agm policy compile --file directive.json
+agm policy check --file policy.json --event event.json
+```
+
+### `agm hook`
+
+Runtime hook entry point. It reads the vendor event from stdin and returns the vendor-specific decision JSON.
+
+```bash
+agm hook --runtime claude --policy policy.json
+agm hook --runtime copilot --policy policy.json
+```
+
+A missing or unreadable policy causes a deny response instead of an allow.
+
 ### `agm doctor`
 
 Detects supported CLIs and known configuration locations. It validates JSON, fingerprints hook commands without storing their plaintext, and reports controls whose activation cannot be proven statically.
@@ -95,7 +166,7 @@ agm doctor --cwd /path/to/repository
 
 ### `agm prove`
 
-Runs synthetic canaries. Live runtime canaries are an experimental v0.1 surface until validated across installed vendor CLI versions.
+Runs synthetic canaries. Live runtime canaries remain an experimental surface and must be validated against the exact installed vendor CLI version.
 
 ```bash
 agm prove
@@ -214,11 +285,11 @@ Each agent vendor can improve its own diagnostics. Organizations still need one 
 
 Agent Guardrail Monitor is designed around that question.
 
-## Scope of v0.1
+## Scope of v0.2-alpha
 
-This release is intentionally narrow.
+The v0.1 regression monitor remains intact. v0.2-alpha adds deterministic enforcement components and project-level hook installation for Claude Code and Copilot.
 
-It verifies known hook/config surfaces and regression state. It is not a general LLM benchmark, prompt evaluator, malware scanner, policy authoring language, or substitute for the vendor's own security controls.
+The alpha does not claim universal control over closed model runtimes. A surface is only called enforced when AGM is actually in the mandatory execution path and the relevant runtime behavior is currently proven. Provider fail-open timeout branches, provider-hosted tools outside AGM's broker, and inaccessible internal memory/runtime behavior remain outside full AGM authority.
 
 ## Roadmap
 
@@ -241,11 +312,11 @@ npm test
 node ./bin/agent-guardrail-monitor.mjs doctor
 ```
 
-No runtime dependencies are required in v0.1.
+No runtime dependencies are required in v0.2-alpha.
 
 ## Security
 
-See [SECURITY.md](SECURITY.md).
+See [SECURITY.md](SECURITY.md), [v0.2 security report](docs/SECURITY-REPORT-v0.2.md), and [v0.2 red-team report](docs/RED-TEAM-v0.2.md).
 
 ## License
 

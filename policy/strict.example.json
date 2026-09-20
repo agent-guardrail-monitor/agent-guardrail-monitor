@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "policyId": "agm-strict-example",
+  "version": 1,
+  "strict": true,
+  "defaults": {
+    "unmatched": "ALLOW",
+    "criticalUnmatched": "BLOCK"
+  },
+  "rules": [
+    {
+      "id": "RULE-BLOCK-DESTRUCTIVE-SHELL",
+      "source": "PLUGIN_POLICY",
+      "priority": "MANDATORY",
+      "status": "ACTIVE",
+      "phase": "PRE_ACTION",
+      "match": {
+        "tool": ["Bash", "bash", "PowerShell", "powershell", "shell"],
+        "commandRegex": "(^|\\s)(rm\\s+-rf|Remove-Item\\s+.*-Recurse)(\\s|$)"
+      },
+      "effect": {
+        "type": "BLOCK",
+        "reason": "Destructive recursive deletion is blocked by strict policy."
+      }
+    },
+    {
+      "id": "RULE-COMPUTER-TOOL",
+      "source": "USER",
+      "priority": "MANDATORY",
+      "status": "ACTIVE",
+      "phase": "PRE_ACTION",
+      "match": {
+        "taskLabels": ["computer_change"]
+      },
+      "effect": {
+        "type": "REQUIRE_TOOL",
+        "tool": "connect-device",
+        "reason": "Computer changes must use the approved device tool."
+      }
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 {
   "name": "agent-guardrail-monitor",
-  "version": "0.1.0",
-  "description": "Detect when coding-agent updates break hooks and guardrails.",
+  "version": "0.2.0-alpha.1",
+  "description": "Detect coding-agent guardrail drift and enforce deterministic pre-action policy on controlled runtimes.",
   "type": "module",
   "bin": {
     "agent-guardrail-monitor": "./bin/agent-guardrail-monitor.mjs",
@@ -18,7 +18,9 @@
     "bin/",
     "src/",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "policy/",
+    "docs/"
   ],
   "publishConfig": {
     "access": "public"
@@ -42,7 +44,10 @@
     "guardrails",
     "hooks",
     "devsecops",
-    "ci"
+    "ci",
+    "policy-engine",
+    "agent-governance",
+    "runtime-enforcement"
   ],
   "license": "MIT"
 }
