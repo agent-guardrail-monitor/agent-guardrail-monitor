@@ -5,7 +5,7 @@ import {
   loadSnapshot,
   saveSnapshot
 } from "./core.mjs";
-import { proveInstalled } from "./prove.mjs";
+import { proveInstalled } from "./prove.mjs";\nimport { runEnforcementCommand } from "./enforcement/cli.mjs";
 
 const DEFAULT_DIR = ".agent-guardrail-monitor";
 
@@ -115,7 +115,7 @@ export async function main(args) {
     return;
   }
 
-  if (command === "doctor") {
+  const enforcementHandled = await runEnforcementCommand(command, rest);\n  if (enforcementHandled) return;\n\n  if (command === "doctor") {
     const snapshot = await makeSnapshot(rest);
     console.log(json ? JSON.stringify(snapshot, null, 2) : "");
     if (!json) printSnapshot(snapshot);
