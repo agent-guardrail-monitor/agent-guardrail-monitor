@@ -31,11 +31,17 @@ function ensurePolicy(projectRoot, requestedPolicy) {
   return target;
 }
 
-function claudeHandler(policyPath) {
+function hookArgs(runtime, policyPath, publicKeyPath) {
+  const args = [cliPath, "hook", "--runtime", runtime, "--policy", policyPath];
+  if (publicKeyPath) args.push("--public-key", publicKeyPath);
+  return args;
+}
+
+function claudeHandler(policyPath, publicKeyPath) {
   return {
     type: "command",
     command: process.execPath,
-    args: [cliPath, "hook", "--runtime", "claude", "--policy", policyPath],
+    args: hookArgs("claude", policyPath, publicKeyPath),
     timeout: 5
   };
 }
@@ -48,7 +54,7 @@ function isAgmClaudeHandler(handler) {
     handler.args.some((arg) => String(arg).endsWith("agent-guardrail-monitor.mjs"));
 }
 
-function installClaude(projectRoot, policyPath) {
+function installClaude(projectRoot, policyPath, publicKeyPath) {
   const file = path.join(projectRoot, ".claude", "settings.json");
   let settings = {};
   if (fs.existsSync(file)) settings = readJson(file);
@@ -67,9 +73,9 @@ function installClaude(projectRoot, policyPath) {
   const allGroup = groups.find((group) => group && (group.matcher === "*" || group.matcher === "" || group.matcher == null));
   if (allGroup) {
     allGroup.hooks ||= [];
-    allGroup.hooks.push(claudeHandler(policyPath));
+    allGroup.hooks.push(claudeHandler(policyPath, publicKeyPath));
   } else {
-    groups.push({ matcher: "*", hooks: [claudeHandler(policyPath)] });
+    groups.push({ matcher: "*", hooks: [claudeHandler(policyPath, publicKeyPath)] });
   }
 
   settings.hooks.PreToolUse = groups;
@@ -77,7 +83,7 @@ function installClaude(projectRoot, policyPath) {
   return file;
 }
 
-function installCopilot(projectRoot, policyPath) {
+function installCopilot(projectRoot, policyPath, publicKeyPath) {
   const file = path.join(projectRoot, ".github", "hooks", "agent-guardrail-monitor.json");
   writeJson(file, {
     version: 1,
@@ -85,7 +91,7 @@ function installCopilot(projectRoot, policyPath) {
       preToolUse: [{
         type: "command",
         exec: process.execPath,
-        args: [cliPath, "hook", "--runtime", "copilot", "--policy", policyPath],
+        args: hookArgs("copilot", policyPath, publicKeyPath),
         timeoutSec: 5
       }]
     }
@@ -93,7 +99,7 @@ function installCopilot(projectRoot, policyPath) {
   return file;
 }
 
-export function installHook({ runtime, cwd = process.cwd(), policy = null } = {}) {
+export function installHook({ runtime, cwd = process.cwd(), policy = null, publicKey = null } = {}) {
   const projectRoot = path.resolve(cwd);
   const normalized = String(runtime || "").toLowerCase();
 
@@ -111,9 +117,18 @@ export function installHook({ runtime, cwd = process.cwd(), policy = null } = {}
   }
 
   const policyPath = ensurePolicy(projectRoot, policy);
+  const policyDocument = readJson(policyPath);
+  const publicKeyPath = publicKey ? path.resolve(projectRoot, publicKey) : null;
+  if (publicKeyPath && !fs.existsSync(publicKeyPath)) {
+    throw new Error("Public key file does not exist: " + publicKeyPath);
+  }
+  if (policyDocument?.bundleVersion === 1 && policyDocument?.signature && !publicKeyPath) {
+    throw new Error("Signed policy bundle installation requires --public-key.");
+  }
+
   const configPath = normalized === "claude"
-    ? installClaude(projectRoot, policyPath)
-    : installCopilot(projectRoot, policyPath);
+    ? installClaude(projectRoot, policyPath, publicKeyPath)
+    : installCopilot(projectRoot, policyPath, publicKeyPath);
 
   return {
     status: "INSTALLED",
@@ -121,6 +136,7 @@ export function installHook({ runtime, cwd = process.cwd(), policy = null } = {}
     projectRoot,
     configPath,
     policyPath,
+    publicKeyPath,
     cliPath,
     limitation: normalized === "claude"
       ? "Claude command-hook timeouts are provider fail-open; AGM remains local and bounded, but timeout bypass is outside AGM authority."
