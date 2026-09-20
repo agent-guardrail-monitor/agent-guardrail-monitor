@@ -1,6 +1,7 @@
 import fs from "node:fs";
-import { evaluatePolicy, VERDICTS } from "./policy.mjs";
+import { VERDICTS } from "./policy.mjs";
 import { validateRoute } from "./route.mjs";
+import { preActionPipeline } from "./pipeline.mjs";
 import { verifyPolicyBundle } from "./signature.mjs";
 
 function parseArgs(value) {
@@ -50,8 +51,30 @@ export function evaluateHook(policy, runtime, input) {
   if (route.decision === VERDICTS.BLOCK) {
     return { ...route, matchedRuleIds: [], policyHash: null, context };
   }
-  const policyDecision = evaluatePolicy(policy, context);
-  return { ...policyDecision, context };
+
+  const pipeline = preActionPipeline({
+    policy,
+    runtime: context.runtime,
+    task: context.task,
+    action: context.action,
+    memory: policy.memoryRegistry || [],
+    requiredMemoryKeys: policy.requiredMemoryKeys || [],
+    skillRegistry: policy.skillRegistry || [],
+    skillExecution: context.skills,
+    toolRegistry: policy.toolRegistry || [],
+    availableTools: policy.availableTools || []
+  });
+
+  return {
+    decision: pipeline.decision,
+    code: pipeline.code,
+    reasons: pipeline.reasons,
+    matchedRuleIds: pipeline.state?.policy?.matchedRuleIds || [],
+    policyHash: pipeline.state?.policy?.policyHash || null,
+    pipelineStage: pipeline.stage,
+    pipelineState: pipeline.state,
+    context
+  };
 }
 
 export function hookOutput(runtime, decision) {
