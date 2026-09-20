@@ -320,7 +320,7 @@ npm test
 node ./bin/agent-guardrail-monitor.mjs doctor
 ```
 
-No runtime dependencies are required in v0.2-alpha.
+The ChatGPT MCP app adds runtime dependencies on the official MCP server/node packages and Zod; `npm ci` installs the pinned dependency graph used by CI and deployment.
 
 ## Security
 
