@@ -19,6 +19,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
+          cache: npm
+      - run: npm ci
       - run: npm test
       - run: node ./bin/agent-guardrail-monitor.mjs doctor
       - run: npm pack --dry-run
