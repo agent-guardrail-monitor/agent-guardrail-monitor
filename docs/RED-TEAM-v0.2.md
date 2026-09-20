@@ -71,3 +71,18 @@ Full resolver/pipeline run: https://github.com/agent-guardrail-monitor/agent-gua
 - generalized semantic prompt-injection detection is not treated as solved.
 
 These remain explicit limitations, not PASS results.
+
+
+## Finding 3 — duplicate route gate hid Tool Router provenance
+
+**Observed:** CI blocked the forbidden tool but returned no `pipelineStage` instead of `TOOL_RESOLUTION`.
+
+**Root cause:** `evaluateHook` had a standalone route check before the canonical pre-action pipeline. The early block prevented Tool Router provenance from being emitted.
+
+**Correction:** removed the duplicate preliminary gate. Runtime hooks now traverse one ordered pipeline for memory, skills, tools, route, and policy.
+
+**Regression:** `runtime hook blocks forbidden registered tool before policy allow`.
+
+**Issue:** https://github.com/agent-guardrail-monitor/agent-guardrail-monitor/issues/4
+
+**Verified:** commit `0b9e3901af0efdd2f0f2295c3fca08cc4942e4bb` passed the Node 20/22/24 CI matrix, `agm doctor`, and `npm pack --dry-run`.
