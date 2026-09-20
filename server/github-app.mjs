@@ -248,11 +248,11 @@ const server = http.createServer((req, res) => {
   }
 
   if (req.method === "GET" && url.pathname === "/support") {
-    return send(res, 302, "", "text/plain");
+    return send(res, 200, `<!doctype html><meta charset="utf-8"><title>Support - Agent Guardrail Monitor</title><h1>Support</h1><p>Open an issue in the public GitHub repository for support, bug reports, and feature requests.</p><p><a href="${REPO_URL}/issues">GitHub Issues</a></p>`, "text/html; charset=utf-8");
   }
 
   if (req.method === "GET" && url.pathname === "/") {
-    return send(res, 200, `<!doctype html><meta charset="utf-8"><title>Agent Guardrail Monitor</title><h1>Agent Guardrail Monitor</h1><p>Detect when coding-agent updates break hooks and guardrails.</p><p><a href="${REPO_URL}">GitHub repository</a> · <a href="/privacy">Privacy</a></p>`, "text/html; charset=utf-8");
+    return send(res, 200, `<!doctype html><meta charset="utf-8"><title>Agent Guardrail Monitor</title><h1>Agent Guardrail Monitor</h1><p>Detect when coding-agent updates break hooks and guardrails.</p><p><a href="https://github.com/apps/agent-guardrail-monitor">Install GitHub App</a> · <a href="${REPO_URL}">Repository</a> · <a href="/privacy">Privacy</a> · <a href="/support">Support</a></p>`, "text/html; charset=utf-8");
   }
 
   if (req.method !== "POST" || url.pathname !== "/webhook") {
