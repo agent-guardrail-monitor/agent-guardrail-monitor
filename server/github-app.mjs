@@ -1,14 +1,29 @@
 import http from "node:http";
 import crypto from "node:crypto";
+import fs from "node:fs";
 
 const PORT = Number(process.env.PORT || 3000);
 const APP_ID = String(process.env.GITHUB_APP_ID || "").trim();
 const PRIVATE_KEY_B64 = String(process.env.GITHUB_PRIVATE_KEY_BASE64 || "").trim();
-const WEBHOOK_SECRET = String(process.env.GITHUB_WEBHOOK_SECRET || "");
+const PRIVATE_KEY_PATH = String(process.env.GITHUB_PRIVATE_KEY_PATH || "/etc/secrets/github-app.pem");
+const WEBHOOK_SECRET_PATH = String(process.env.GITHUB_WEBHOOK_SECRET_PATH || "/etc/secrets/webhook-secret.txt");
 const REPO_URL = "https://github.com/agent-guardrail-monitor/agent-guardrail-monitor";
 
+function readSecretFile(filePath) {
+  try {
+    return fs.readFileSync(filePath, "utf8").trim();
+  } catch {
+    return "";
+  }
+}
+
+const PRIVATE_KEY = readSecretFile(PRIVATE_KEY_PATH) ||
+  (PRIVATE_KEY_B64 ? Buffer.from(PRIVATE_KEY_B64, "base64").toString("utf8").trim() : "");
+const WEBHOOK_SECRET = String(process.env.GITHUB_WEBHOOK_SECRET || "").trim() ||
+  readSecretFile(WEBHOOK_SECRET_PATH);
+
 function configured() {
-  return Boolean(APP_ID && PRIVATE_KEY_B64 && WEBHOOK_SECRET);
+  return Boolean(APP_ID && PRIVATE_KEY && WEBHOOK_SECRET);
 }
 
 function base64url(input) {
@@ -16,13 +31,12 @@ function base64url(input) {
 }
 
 function appJwt() {
-  if (!APP_ID || !PRIVATE_KEY_B64) throw new Error("GitHub App credentials are not configured");
+  if (!APP_ID || !PRIVATE_KEY) throw new Error("GitHub App credentials are not configured");
   const now = Math.floor(Date.now() / 1000);
   const header = base64url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
   const payload = base64url(JSON.stringify({ iat: now - 60, exp: now + 540, iss: APP_ID }));
   const unsigned = `${header}.${payload}`;
-  const key = Buffer.from(PRIVATE_KEY_B64, "base64").toString("utf8");
-  const signature = crypto.sign("RSA-SHA256", Buffer.from(unsigned), key).toString("base64url");
+  const signature = crypto.sign("RSA-SHA256", Buffer.from(unsigned), PRIVATE_KEY).toString("base64url");
   return `${unsigned}.${signature}`;
 }
 
