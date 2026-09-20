@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import { evaluatePolicy, VERDICTS } from "./policy.mjs";
 import { validateRoute } from "./route.mjs";
+import { verifyPolicyBundle } from "./signature.mjs";
 
 function parseArgs(value) {
   if (typeof value !== "string") return value ?? {};
@@ -72,6 +73,13 @@ export function hookOutput(runtime, decision) {
   };
 }
 
-export function loadPolicy(file) {
-  return JSON.parse(fs.readFileSync(file, "utf8"));
+export function loadPolicy(file, { publicKey = null } = {}) {
+  const document = JSON.parse(fs.readFileSync(file, "utf8"));
+  if (document?.bundleVersion === 1 && document?.signature) {
+    if (!publicKey) throw new Error("Signed policy bundle requires a public key.");
+    const verification = verifyPolicyBundle(document, publicKey);
+    if (!verification.valid) throw new Error("Signed policy bundle verification failed: " + verification.code);
+    return document.policy;
+  }
+  return document;
 }
