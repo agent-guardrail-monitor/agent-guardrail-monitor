@@ -1,11 +1,16 @@
 {
+  "_selftest": "restored",
   "hooks": {
     "SessionStart": [
       {
         "matcher": "startup",
         "hooks": [
-          { "type": "command", "command": "node -e \"process.exit(0)\"" }
+          {
+            "type": "command",
+            "command": "node -e \"process.exit(0)\""
+          }
         ]
       }
     ]
-  
+  }
+}
