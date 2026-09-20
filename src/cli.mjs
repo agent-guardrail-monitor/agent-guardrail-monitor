@@ -5,7 +5,8 @@ import {
   loadSnapshot,
   saveSnapshot
 } from "./core.mjs";
-import { proveInstalled } from "./prove.mjs";\nimport { runEnforcementCommand } from "./enforcement/cli.mjs";
+import { proveInstalled } from "./prove.mjs";
+import { runEnforcementCommand } from "./enforcement/cli.mjs";
 
 const DEFAULT_DIR = ".agent-guardrail-monitor";
 
@@ -87,6 +88,9 @@ Usage:
   agm baseline [--cwd DIR] [--out FILE] [--prove] [--live]
   agm diff BASELINE CURRENT [--json]
   agm gate --baseline FILE [--cwd DIR] [--prove] [--live] [--json]
+  agm policy validate|compile|check ...
+  agm hook --runtime RUNTIME --policy POLICY.json
+  agm audit verify --file AUDIT.jsonl
 
 Rules:
   PASS     execution or static evidence supports the control.
@@ -115,7 +119,10 @@ export async function main(args) {
     return;
   }
 
-  const enforcementHandled = await runEnforcementCommand(command, rest);\n  if (enforcementHandled) return;\n\n  if (command === "doctor") {
+  const enforcementHandled = await runEnforcementCommand(command, rest);
+  if (enforcementHandled) return;
+
+  if (command === "doctor") {
     const snapshot = await makeSnapshot(rest);
     console.log(json ? JSON.stringify(snapshot, null, 2) : "");
     if (!json) printSnapshot(snapshot);
