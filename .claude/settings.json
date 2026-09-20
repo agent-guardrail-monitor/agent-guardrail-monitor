@@ -1,4 +1,5 @@
 {
+  "_selftest": "pass-2",
   "hooks": {
     "SessionStart": [
       {
