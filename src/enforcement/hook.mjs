@@ -1,0 +1,77 @@
+import fs from "node:fs";
+import { evaluatePolicy, VERDICTS } from "./policy.mjs";
+import { validateRoute } from "./route.mjs";
+
+function parseArgs(value) {
+  if (typeof value !== "string") return value ?? {};
+  try { return JSON.parse(value); } catch { return { command: value }; }
+}
+
+function normalizedRuntime(runtime) {
+  const value = String(runtime || "").toLowerCase();
+  if (value === "github" || value === "github-copilot") return "copilot";
+  if (value === "claude-code") return "claude";
+  return value;
+}
+
+function likelyCritical(tool, args) {
+  const name = String(tool || "").toLowerCase();
+  if (["write", "edit", "create", "bash", "powershell", "shell", "apply_patch", "computer"].some((x) => name.includes(x))) {
+    return true;
+  }
+  const command = typeof args?.command === "string" ? args.command : "";
+  return /\b(rm|del|remove-item|git\s+push|npm\s+publish|curl|wget)\b/i.test(command);
+}
+
+export function normalizeHookInput(runtime, input = {}) {
+  const rt = normalizedRuntime(runtime);
+  const tool = input.tool_name || input.toolName || input.tool || "";
+  const args = parseArgs(input.tool_input ?? input.toolArgs ?? input.args ?? {});
+  return {
+    runtime: rt,
+    phase: "PRE_ACTION",
+    task: input.agmTask || input.task || {},
+    skills: input.agmSkills || input.skills || [],
+    action: {
+      id: input.tool_use_id || input.toolCallId || input.actionId || null,
+      kind: "TOOL_CALL",
+      tool,
+      args,
+      critical: input.agmCritical === true || likelyCritical(tool, args)
+    },
+    rawEvent: input.hook_event_name || input.event || "PreToolUse"
+  };
+}
+
+export function evaluateHook(policy, runtime, input) {
+  const context = normalizeHookInput(runtime, input);
+  const route = validateRoute(context.task, context.action, { strict: false });
+  if (route.decision === VERDICTS.BLOCK) {
+    return { ...route, matchedRuleIds: [], policyHash: null, context };
+  }
+  const policyDecision = evaluatePolicy(policy, context);
+  return { ...policyDecision, context };
+}
+
+export function hookOutput(runtime, decision) {
+  const rt = normalizedRuntime(runtime);
+  if (decision.decision === VERDICTS.ALLOW) return {};
+
+  const reason = (decision.reasons || [decision.reason || decision.code || "Blocked by Agent Guardrail Monitor"]).join(" ");
+
+  if (rt === "copilot") {
+    return { permissionDecision: "deny", permissionDecisionReason: reason };
+  }
+
+  return {
+    hookSpecificOutput: {
+      hookEventName: "PreToolUse",
+      permissionDecision: "deny",
+      permissionDecisionReason: reason
+    }
+  };
+}
+
+export function loadPolicy(file) {
+  return JSON.parse(fs.readFileSync(file, "utf8"));
+}
