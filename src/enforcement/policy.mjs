@@ -147,6 +147,7 @@ export function compileDirective(input) {
     };
   }
 
+  const normalized = input.normalizedRule;
   const rule = {
     id: base.id,
     source,
@@ -155,7 +156,9 @@ export function compileDirective(input) {
     priority: base.priority,
     version: base.version,
     status: "ACTIVE",
-    ...input.normalizedRule
+    phase: normalized.phase || "PRE_ACTION",
+    match: normalized.match || {},
+    effect: normalized.effect || null
   };
   return { status: "COMPILED", directive: base, rule };
 }
