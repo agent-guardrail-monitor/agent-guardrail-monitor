@@ -2,7 +2,11 @@
 
 **Did an AI coding-agent upgrade silently turn off your guardrails?**
 
-Agent Guardrail Monitor is a vendor-neutral CLI that snapshots the controls around Claude Code, OpenAI Codex, and GitHub Copilot CLI, then fails CI when a later runtime or configuration state loses a control that previously existed.
+Agent Guardrail Monitor is a vendor-neutral CLI and GitHub App that snapshots the controls around Claude Code, OpenAI Codex, and GitHub Copilot CLI, then fails CI when a later runtime or configuration state loses a control that previously existed.
+
+**GitHub App:** [Install Agent Guardrail Monitor](https://github.com/apps/agent-guardrail-monitor)
+
+The GitHub App requests only **Contents: read**, **Metadata: read**, and **Checks: read/write**. On each push it publishes an **Agent Guardrail Monitor** check on the pushed commit.
 
 It treats **PASS**, **FAIL**, and **UNKNOWN** as different states. A missing proof is never promoted to PASS.
 
