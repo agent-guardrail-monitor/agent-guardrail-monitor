@@ -194,10 +194,10 @@ export function evaluatePolicy(policy, context = {}) {
   }
 
   const phase = context.phase || "PRE_ACTION";
-  const active = policy.rules.filter((rule) =>
-    (rule.status || "ACTIVE") === "ACTIVE" &&
-    (rule.phase || "PRE_ACTION") !== "ANY" ? (rule.phase || "PRE_ACTION") === phase : true
-  );
+  const active = policy.rules.filter((rule) => {
+    const rulePhase = rule.phase || "PRE_ACTION";
+    return (rule.status || "ACTIVE") === "ACTIVE" && (rulePhase === "ANY" || rulePhase === phase);
+  });
   const matched = active.filter((rule) => matches(rule, context));
   const conflict = detectMandatoryConflict(matched);
 
