@@ -90,6 +90,7 @@ Usage:
   agm gate --baseline FILE [--cwd DIR] [--prove] [--live] [--json]
   agm policy validate|compile|check ...
   agm hook --runtime RUNTIME --policy POLICY.json
+  agm install-hook --runtime claude|copilot|codex [--cwd DIR] [--policy POLICY.json]
   agm audit verify --file AUDIT.jsonl
 
 Rules:
