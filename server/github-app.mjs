@@ -57,18 +57,20 @@ async function installationToken(installationId) {
   return data.token;
 }
 
-async function readContent(owner, repo, filePath, token) {
+async function readContent(owner, repo, filePath, token, ref) {
+  const suffix = ref ? `?ref=${encodeURIComponent(ref)}` : "";
   const data = await api(
-    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${filePath.split("/").map(encodeURIComponent).join("/")}`,
+    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${filePath.split("/").map(encodeURIComponent).join("/")}${suffix}`,
     { token }
   );
   if (!data || Array.isArray(data) || data.type !== "file") return null;
   return Buffer.from(data.content || "", "base64").toString("utf8");
 }
 
-async function listDirectory(owner, repo, dirPath, token) {
+async function listDirectory(owner, repo, dirPath, token, ref) {
+  const suffix = ref ? `?ref=${encodeURIComponent(ref)}` : "";
   const data = await api(
-    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${dirPath.split("/").map(encodeURIComponent).join("/")}`,
+    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${dirPath.split("/").map(encodeURIComponent).join("/")}${suffix}`,
     { token }
   );
   return Array.isArray(data) ? data : [];
@@ -108,7 +110,7 @@ function parseCodexToml(filePath, text) {
   };
 }
 
-async function scanRepository(owner, repo, token) {
+async function scanRepository(owner, repo, token, ref) {
   const results = [];
   const fixed = [
     ["claude", ".claude/settings.json", "json"],
@@ -117,7 +119,7 @@ async function scanRepository(owner, repo, token) {
   ];
 
   for (const [runtime, filePath, format] of fixed) {
-    const text = await readContent(owner, repo, filePath, token);
+    const text = await readContent(owner, repo, filePath, token, ref);
     if (text === null) continue;
     const item = format === "json"
       ? parseJsonConfig(runtime, filePath, text)
@@ -128,10 +130,10 @@ async function scanRepository(owner, repo, token) {
     results.push(item);
   }
 
-  const copilotFiles = await listDirectory(owner, repo, ".github/hooks", token);
+  const copilotFiles = await listDirectory(owner, repo, ".github/hooks", token, ref);
   for (const entry of copilotFiles) {
     if (entry.type !== "file" || !entry.name.toLowerCase().endsWith(".json")) continue;
-    const text = await readContent(owner, repo, entry.path, token);
+    const text = await readContent(owner, repo, entry.path, token, ref);
     if (text !== null) results.push(parseJsonConfig("copilot", entry.path, text));
   }
 
@@ -173,7 +175,7 @@ function markdown(scan) {
 
 async function publishCheck({ owner, repo, sha, installationId }) {
   const token = await installationToken(installationId);
-  const scan = await scanRepository(owner, repo, token);
+  const scan = await scanRepository(owner, repo, token, sha);
   const conclusion = scan.state === "FAIL" ? "failure" : scan.state === "PASS" ? "success" : "neutral";
   await api(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/check-runs`, {
     token,
