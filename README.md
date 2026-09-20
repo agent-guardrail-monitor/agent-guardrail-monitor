@@ -1,10 +1,10 @@
 # Agent Guardrail Monitor
 
-**Did an AI coding-agent upgrade silently turn off your guardrails?**
+**Independent guardrail verification for AI coding-agent updates.**
 
-Agent Guardrail Monitor is a vendor-neutral CLI and GitHub App that snapshots the controls around Claude Code, OpenAI Codex, and GitHub Copilot CLI, then fails CI when a later runtime or configuration state loses a control that previously existed.
+Agent Guardrail Monitor is a vendor-neutral GitHub App and CLI that verifies the controls around Claude Code, OpenAI Codex, and GitHub Copilot CLI, then surfaces regressions when a later runtime or configuration state loses a control that previously existed.
 
-**GitHub App:** [Install Agent Guardrail Monitor](https://github.com/apps/agent-guardrail-monitor)
+**Free GitHub App:** [Install Agent Guardrail Monitor](https://github.com/apps/agent-guardrail-monitor)
 
 The GitHub App requests only **Contents: read**, **Metadata: read**, and **Checks: read/write**. On each push it publishes an **Agent Guardrail Monitor** check on the pushed commit.
 
@@ -57,7 +57,7 @@ npm link
 agm doctor
 ```
 
-The planned npm package name is `agent-guardrail-monitor`; availability was checked before this release, but the name is not reserved until publication.
+The current public distribution installs directly from GitHub. An npm publication is not required to use v0.1.
 
 ## Fast path
 
@@ -200,7 +200,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm install -g agent-guardrail-monitor
+      - run: npm install -g github:agent-guardrail-monitor/agent-guardrail-monitor
       - run: agm gate --baseline .agent-guardrail-monitor/baseline.json
 ```
 
