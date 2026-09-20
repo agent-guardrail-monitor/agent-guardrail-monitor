@@ -3,6 +3,7 @@ import path from "node:path";
 import { compileDirective, evaluatePolicy, validatePolicy, VERDICTS } from "./policy.mjs";
 import { evaluateHook, hookOutput, loadPolicy } from "./hook.mjs";
 import { AuditLog } from "./audit.mjs";
+import { installHook } from "./install.mjs";
 
 function value(args, flag, fallback = null) {
   const index = args.indexOf(flag);
@@ -31,6 +32,7 @@ function enforcementHelp() {
     "  agm policy compile --file DIRECTIVE.json",
     "  agm policy check --file POLICY.json --event EVENT.json [--runtime claude|codex|copilot]",
     "  agm hook --runtime claude|codex|copilot --policy POLICY.json [--task TASK.json] [--skills SKILLS.json]",
+    "  agm install-hook --runtime claude|copilot|codex [--cwd DIR] [--policy POLICY.json]",
     "  agm audit verify --file AUDIT.jsonl"
   ].join("\n"));
 }
@@ -109,6 +111,19 @@ export async function runEnforcementCommand(command, args) {
       };
       console.log(JSON.stringify(hookOutput(runtime, blocked)));
     }
+    return true;
+  }
+
+  if (command === "install-hook") {
+    const runtime = value(args, "--runtime");
+    if (!runtime) throw new Error("install-hook requires --runtime claude|copilot|codex");
+    const result = installHook({
+      runtime,
+      cwd: value(args, "--cwd", process.cwd()),
+      policy: value(args, "--policy")
+    });
+    console.log(JSON.stringify(result, null, 2));
+    if (result.status !== "INSTALLED") process.exitCode = 2;
     return true;
   }
 
