@@ -61,7 +61,11 @@ export function preActionPipeline({
     );
   }
 
-  const toolResolution = resolveTools(toolRegistry, task, availableTools);
+  const hasToolRegistry = Array.isArray(toolRegistry) && toolRegistry.length > 0;
+  const toolResolution = hasToolRegistry
+    ? resolveTools(toolRegistry, task, availableTools)
+    : { status: "RESOLVED", tools: [], missingRequired: [], unavailableRequired: [], unchecked: true };
+
   if (toolResolution.status === "BLOCK") {
     return stop(
       VERDICTS.BLOCK,
@@ -72,7 +76,12 @@ export function preActionPipeline({
     );
   }
 
-  const toolRoute = action.tool ? routeTool(toolResolution, action.tool) : { decision: VERDICTS.ALLOW, code: "NO_TOOL_ACTION" };
+  const toolRoute = !action.tool
+    ? { decision: VERDICTS.ALLOW, code: "NO_TOOL_ACTION" }
+    : hasToolRegistry
+      ? routeTool(toolResolution, action.tool)
+      : { decision: VERDICTS.ALLOW, code: "TOOL_REGISTRY_UNCONFIGURED" };
+
   if (toolRoute.decision !== VERDICTS.ALLOW) {
     return stop(
       toolRoute.decision === "UNKNOWN" && action.critical === true ? VERDICTS.BLOCK : toolRoute.decision,
@@ -83,7 +92,7 @@ export function preActionPipeline({
     );
   }
 
-  const route = validateRoute(task, action, { strict: policy?.strict === true });
+  const route = validateRoute(task, action, { strict: policy?.requireObjective === true });
   if (route.decision !== VERDICTS.ALLOW) {
     return stop(
       route.decision === VERDICTS.UNKNOWN && action.critical === true ? VERDICTS.BLOCK : route.decision,
