@@ -1,16 +1,11 @@
 {
-  "_selftest": "pass-2",
   "hooks": {
     "SessionStart": [
       {
         "matcher": "startup",
         "hooks": [
-          {
-            "type": "command",
-            "command": "node -e \"process.exit(0)\""
-          }
+          { "type": "command", "command": "node -e \"process.exit(0)\"" }
         ]
       }
     ]
-  }
-}
+  
