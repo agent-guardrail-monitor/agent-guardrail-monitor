@@ -1,6 +1,5 @@
 import fs from "node:fs";
 import { VERDICTS } from "./policy.mjs";
-import { validateRoute } from "./route.mjs";
 import { preActionPipeline } from "./pipeline.mjs";
 import { verifyPolicyBundle } from "./signature.mjs";
 
@@ -47,10 +46,6 @@ export function normalizeHookInput(runtime, input = {}) {
 
 export function evaluateHook(policy, runtime, input) {
   const context = normalizeHookInput(runtime, input);
-  const route = validateRoute(context.task, context.action, { strict: false });
-  if (route.decision === VERDICTS.BLOCK) {
-    return { ...route, matchedRuleIds: [], policyHash: null, context };
-  }
 
   const pipeline = preActionPipeline({
     policy,
