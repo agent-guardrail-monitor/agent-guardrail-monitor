@@ -11,6 +11,7 @@
     "test": "node --test",
     "doctor": "node ./bin/agent-guardrail-monitor.mjs doctor",
     "snapshot": "node ./bin/agent-guardrail-monitor.mjs snapshot",
+    "start": "node ./server/github-app.mjs",
     "prepublishOnly": "npm test"
   },
   "files": [
