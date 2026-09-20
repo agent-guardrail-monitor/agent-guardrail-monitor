@@ -1,53 +1,59 @@
 {
-  "name": "agent-guardrail-monitor",
-  "version": "0.2.0-alpha.1",
-  "description": "Detect coding-agent guardrail drift and enforce deterministic pre-action policy on controlled runtimes.",
-  "type": "module",
-  "bin": {
-    "agent-guardrail-monitor": "./bin/agent-guardrail-monitor.mjs",
-    "agm": "./bin/agent-guardrail-monitor.mjs"
-  },
-  "scripts": {
-    "test": "node --test",
-    "doctor": "node ./bin/agent-guardrail-monitor.mjs doctor",
-    "snapshot": "node ./bin/agent-guardrail-monitor.mjs snapshot",
-    "start": "node ./server/github-app.mjs",
-    "prepublishOnly": "npm test"
-  },
-  "files": [
-    "bin/",
-    "src/",
-    "README.md",
-    "LICENSE",
-    "policy/",
-    "docs/"
-  ],
-  "publishConfig": {
-    "access": "public"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/agent-guardrail-monitor/agent-guardrail-monitor.git"
-  },
-  "bugs": {
-    "url": "https://github.com/agent-guardrail-monitor/agent-guardrail-monitor/issues"
-  },
-  "homepage": "https://github.com/agent-guardrail-monitor/agent-guardrail-monitor#readme",
-  "engines": {
-    "node": ">=20"
-  },
-  "keywords": [
-    "ai-agents",
-    "claude-code",
-    "codex",
-    "github-copilot",
-    "guardrails",
-    "hooks",
-    "devsecops",
-    "ci",
-    "policy-engine",
-    "agent-governance",
-    "runtime-enforcement"
-  ],
-  "license": "MIT"
+    "name":  "agent-guardrail-monitor",
+    "version":  "0.2.0-alpha.2",
+    "description":  "Detect coding-agent guardrail drift and enforce deterministic pre-action policy on controlled runtimes.",
+    "type":  "module",
+    "bin":  {
+                "agent-guardrail-monitor":  "./bin/agent-guardrail-monitor.mjs",
+                "agm":  "./bin/agent-guardrail-monitor.mjs"
+            },
+    "scripts":  {
+                    "test":  "node --test",
+                    "doctor":  "node ./bin/agent-guardrail-monitor.mjs doctor",
+                    "snapshot":  "node ./bin/agent-guardrail-monitor.mjs snapshot",
+                    "start":  "node ./server/github-app.mjs",
+                    "prepublishOnly":  "npm test"
+                },
+    "files":  [
+                  "bin/",
+                  "src/",
+                  "README.md",
+                  "LICENSE",
+                  "policy/",
+                  "docs/",
+                  "server/"
+              ],
+    "publishConfig":  {
+                          "access":  "public"
+                      },
+    "repository":  {
+                       "type":  "git",
+                       "url":  "git+https://github.com/agent-guardrail-monitor/agent-guardrail-monitor.git"
+                   },
+    "bugs":  {
+                 "url":  "https://github.com/agent-guardrail-monitor/agent-guardrail-monitor/issues"
+             },
+    "homepage":  "https://github.com/agent-guardrail-monitor/agent-guardrail-monitor#readme",
+    "engines":  {
+                    "node":  "\u003e=20"
+                },
+    "keywords":  [
+                     "ai-agents",
+                     "claude-code",
+                     "codex",
+                     "github-copilot",
+                     "guardrails",
+                     "hooks",
+                     "devsecops",
+                     "ci",
+                     "policy-engine",
+                     "agent-governance",
+                     "runtime-enforcement"
+                 ],
+    "license":  "MIT",
+    "dependencies":  {
+                         "@modelcontextprotocol/node":  "^2.0.0",
+                         "@modelcontextprotocol/server":  "^2.0.0",
+                         "zod":  "^4.6.5"
+                     }
 }

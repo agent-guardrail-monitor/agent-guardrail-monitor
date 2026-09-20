@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "policyId": "agm-chatgpt-default",
+  "version": 1,
+  "strict": true,
+  "requireObjective": true,
+  "defaults": {
+    "unmatched": "ALLOW",
+    "criticalUnmatched": "BLOCK"
+  },
+  "rules": [
+    {
+      "id": "CHATGPT-BLOCK-DESTRUCTIVE-SHELL",
+      "source": "PLUGIN_POLICY",
+      "priority": "MANDATORY",
+      "status": "ACTIVE",
+      "phase": "PRE_ACTION",
+      "match": {
+        "runtime": ["chatgpt-mcp"],
+        "tool": ["Bash", "bash", "PowerShell", "powershell", "shell"],
+        "commandRegex": "(^|\\s)(rm\\s+-rf|Remove-Item\\s+.*-Recurse)(\\s|$)"
+      },
+      "effect": {
+        "type": "BLOCK",
+        "reason": "Destructive recursive deletion is blocked by the ChatGPT AGM policy."
+      }
+    }
+  ]
+}

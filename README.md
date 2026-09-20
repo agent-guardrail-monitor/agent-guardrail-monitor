@@ -45,6 +45,14 @@ Codex installation intentionally returns `UNKNOWN` until the exact runtime/versi
 
 See [Enforcement installation](docs/INSTALL-ENFORCEMENT-v0.2.md) and [Architecture](docs/ARCHITECTURE-ENFORCEMENT-v0.2.md).
 
+## ChatGPT MCP app
+
+v0.2.0-alpha.2 adds a remote, read-only MCP decision app for ChatGPT at `https://agent-guardrail-monitor.onrender.com/mcp`.
+
+It exposes `agm_status`, `agm_preflight`, and `agm_validate_output`. A mandatory skill without load, execution, and proof is blocked before release; unknown factual claims presented as facts are blocked by the final gate.
+
+The ChatGPT integration reports `AVAILABLE_WHEN_INVOKED`: it produces deterministic decisions whenever the host calls AGM, while ordinary ChatGPT turns outside the MCP call path remain outside AGM authority. See [ChatGPT app installation](docs/INSTALL-CHATGPT-APP.md).
+
 ```text
 Claude Code  2.1.263 -> 2.1.264
 PreToolUse   present  -> missing
@@ -312,7 +320,7 @@ npm test
 node ./bin/agent-guardrail-monitor.mjs doctor
 ```
 
-No runtime dependencies are required in v0.2-alpha.
+The ChatGPT MCP app adds runtime dependencies on the official MCP server/node packages and Zod; `npm ci` installs the pinned dependency graph used by CI and deployment.
 
 ## Security
 

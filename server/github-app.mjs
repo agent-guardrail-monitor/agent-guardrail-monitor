@@ -1,6 +1,8 @@
 import http from "node:http";
 import crypto from "node:crypto";
 import fs from "node:fs";
+import { agmMcpNodeHandler } from "./chatgpt-mcp.mjs";
+import { PRODUCT_VERSION } from "../src/core.mjs";
 
 const PORT = Number(process.env.PORT || 3000);
 const APP_ID = String(process.env.GITHUB_APP_ID || "").trim();
@@ -8,6 +10,7 @@ const PRIVATE_KEY_B64 = String(process.env.GITHUB_PRIVATE_KEY_BASE64 || "").trim
 const PRIVATE_KEY_PATH = String(process.env.GITHUB_PRIVATE_KEY_PATH || "/etc/secrets/github-app.pem");
 const WEBHOOK_SECRET_PATH = String(process.env.GITHUB_WEBHOOK_SECRET_PATH || "/etc/secrets/webhook-secret.txt");
 const REPO_URL = "https://github.com/agent-guardrail-monitor/agent-guardrail-monitor";
+const DEPLOY_SHA = String(process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || "").trim() || null;
 
 function readSecretFile(filePath) {
   try {
@@ -168,7 +171,7 @@ function markdown(scan) {
     "| --- | --- | --- |"
   ];
   if (!scan.results.length) {
-    lines.push("| — | — | No supported guardrail configuration found |");
+    lines.push("| Ã¢â‚¬â€ | Ã¢â‚¬â€ | No supported guardrail configuration found |");
   } else {
     for (const item of scan.results) {
       lines.push(`| ${item.runtime} | \`${item.filePath}\` | ${item.events.length ? item.events.join(", ") : "none detected"} |`);
@@ -253,20 +256,32 @@ function send(res, status, body, contentType = "text/plain; charset=utf-8") {
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
 
+  if (url.pathname === "/mcp") {
+    agmMcpNodeHandler(req, res).catch((error) => {
+      console.error(JSON.stringify({ event: "mcp_error", message: error.message }));
+      if (!res.headersSent) send(res, 500, "mcp error");
+    });
+    return;
+  }
+
   if (req.method === "GET" && url.pathname === "/health") {
-    return send(res, 200, JSON.stringify({ ok: true, configured: configured() }), "application/json");
+    return send(res, 200, JSON.stringify({ ok: true, configured: configured(), version: PRODUCT_VERSION, mcp: true, commit: DEPLOY_SHA }), "application/json");
   }
 
   if (req.method === "GET" && url.pathname === "/privacy") {
-    return send(res, 200, `<!doctype html><meta charset="utf-8"><title>Privacy - Agent Guardrail Monitor</title><h1>Privacy</h1><p>Agent Guardrail Monitor processes repository configuration required to evaluate coding-agent guardrails. The service does not sell user data. Repository source is not retained by the v0.1 service beyond transient processing required to generate checks.</p><p><a href="${REPO_URL}">Project repository</a></p>`, "text/html; charset=utf-8");
+    return send(res, 200, `<!doctype html><meta charset="utf-8"><title>Privacy - Agent Guardrail Monitor</title><h1>Privacy</h1><p>Agent Guardrail Monitor transiently processes guardrail configuration and MCP decision inputs required to evaluate policy, skills, tools, and evidence. The application code does not persist MCP evaluation payloads and does not sell user data. Hosting infrastructure may retain ordinary operational request metadata.</p><p><a href="${REPO_URL}">Project repository</a></p>`, "text/html; charset=utf-8");
   }
 
   if (req.method === "GET" && url.pathname === "/support") {
     return send(res, 200, `<!doctype html><meta charset="utf-8"><title>Support - Agent Guardrail Monitor</title><h1>Support</h1><p>Open an issue in the public GitHub repository for support, bug reports, and feature requests.</p><p><a href="${REPO_URL}/issues">GitHub Issues</a></p>`, "text/html; charset=utf-8");
   }
 
+  if (req.method === "GET" && url.pathname === "/terms") {
+    return send(res, 200, `<!doctype html><meta charset="utf-8"><title>Terms - Agent Guardrail Monitor</title><h1>Terms</h1><p>Agent Guardrail Monitor is provided as pre-release software for guardrail verification and policy decisions. Users remain responsible for validating enforcement boundaries, runtime permissions, and deployment configuration.</p><p><a href="${REPO_URL}">Project repository and license</a></p>`, "text/html; charset=utf-8");
+  }
+
   if (req.method === "GET" && url.pathname === "/") {
-    return send(res, 200, `<!doctype html><meta charset="utf-8"><title>Agent Guardrail Monitor</title><h1>Agent Guardrail Monitor</h1><p>Detect when coding-agent updates break hooks and guardrails.</p><p><a href="https://github.com/apps/agent-guardrail-monitor">Install GitHub App</a> · <a href="${REPO_URL}">Repository</a> · <a href="/privacy">Privacy</a> · <a href="/support">Support</a></p>`, "text/html; charset=utf-8");
+    return send(res, 200, `<!doctype html><meta charset="utf-8"><title>Agent Guardrail Monitor</title><h1>Agent Guardrail Monitor</h1><p>Deterministic guardrail verification and decision gates for AI agents.</p><p><a href="https://github.com/apps/agent-guardrail-monitor">Install GitHub App</a> &middot; <a href="${REPO_URL}">Repository</a> &middot; <a href="/privacy">Privacy</a> &middot; <a href="/terms">Terms</a> &middot; <a href="/support">Support</a></p>`, "text/html; charset=utf-8");
   }
 
   if (req.method !== "POST" || url.pathname !== "/webhook") {
