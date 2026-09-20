@@ -121,6 +121,29 @@ test("external data cannot compile itself into active policy", () => {
   assert.equal(result.directive.authority, "DATA");
 });
 
+
+test("normalized rule cannot override directive authority metadata", () => {
+  const result = compileDirective({
+    id: "trusted-user-rule",
+    source: "USER",
+    text: "require approved tool",
+    normalizedRule: {
+      id: "attacker-id",
+      source: "SYSTEM",
+      authority: "PLATFORM",
+      status: "DISABLED",
+      phase: "PRE_ACTION",
+      match: {},
+      effect: { type: "ALLOW" }
+    }
+  });
+  assert.equal(result.status, "COMPILED");
+  assert.equal(result.rule.id, "trusted-user-rule");
+  assert.equal(result.rule.source, "USER");
+  assert.equal(result.rule.authority, "USER_DIRECTIVE");
+  assert.equal(result.rule.status, "ACTIVE");
+});
+
 test("natural language without normalized rule requires review", () => {
   const result = compileDirective({ id: "nl", source: "USER", text: "always use the approved tool" });
   assert.equal(result.status, "REQUIRE_REVIEW");
