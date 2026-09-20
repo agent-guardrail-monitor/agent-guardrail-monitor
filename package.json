@@ -1,0 +1,47 @@
+{
+  "name": "agent-guardrail-monitor",
+  "version": "0.1.0",
+  "description": "Detect when coding-agent updates break hooks and guardrails.",
+  "type": "module",
+  "bin": {
+    "agent-guardrail-monitor": "./bin/agent-guardrail-monitor.mjs",
+    "agm": "./bin/agent-guardrail-monitor.mjs"
+  },
+  "scripts": {
+    "test": "node --test",
+    "doctor": "node ./bin/agent-guardrail-monitor.mjs doctor",
+    "snapshot": "node ./bin/agent-guardrail-monitor.mjs snapshot",
+    "prepublishOnly": "npm test"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/agent-guardrail-monitor/agent-guardrail-monitor.git"
+  },
+  "bugs": {
+    "url": "https://github.com/agent-guardrail-monitor/agent-guardrail-monitor/issues"
+  },
+  "homepage": "https://github.com/agent-guardrail-monitor/agent-guardrail-monitor#readme",
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "ai-agents",
+    "claude-code",
+    "codex",
+    "github-copilot",
+    "guardrails",
+    "hooks",
+    "devsecops",
+    "ci"
+  ],
+  "license": "MIT"
+}
