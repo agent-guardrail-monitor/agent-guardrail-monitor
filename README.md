@@ -95,7 +95,7 @@ npm link
 agm doctor
 ```
 
-The current public distribution installs directly from GitHub. An npm publication is not required to use v0.1.
+The public distribution installs directly from GitHub. An npm publication is not required; v0.2-alpha remains a pre-release until its release tag is published.
 
 ## Fast path
 
@@ -166,7 +166,7 @@ agm doctor --cwd /path/to/repository
 
 ### `agm prove`
 
-Runs synthetic canaries. Live runtime canaries are an experimental v0.1 surface until validated across installed vendor CLI versions.
+Runs synthetic canaries. Live runtime canaries remain an experimental surface and must be validated against the exact installed vendor CLI version.
 
 ```bash
 agm prove
@@ -316,7 +316,7 @@ No runtime dependencies are required in v0.2-alpha.
 
 ## Security
 
-See [SECURITY.md](SECURITY.md).
+See [SECURITY.md](SECURITY.md), [v0.2 security report](docs/SECURITY-REPORT-v0.2.md), and [v0.2 red-team report](docs/RED-TEAM-v0.2.md).
 
 ## License
 
