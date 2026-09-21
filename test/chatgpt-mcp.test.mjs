@@ -47,6 +47,7 @@ test("ChatGPT MCP lists AGM decision tools", async () => {
     const names = message.result.tools.map((tool) => tool.name);
     assert.deepEqual(names.sort(), [
       "agm_preflight",
+      "agm_prepare_repair_handoff",
       "agm_status",
       "agm_validate_output"
     ]);
@@ -89,6 +90,27 @@ test("ChatGPT MCP blocks destructive shell commands", async () => {
     assert.equal(message.result.structuredContent.code, "RULE_BLOCK");
   });
 });
+test("ChatGPT MCP prepares a Software Repair Engineer handoff", async () => {
+  await withMcpServer(async (url) => {
+    const message = await mcpCall(url, 4, "tools/call", {
+      name: "agm_prepare_repair_handoff",
+      arguments: {
+        regressions: [{
+          runtime: "claude",
+          code: "HOOK_EVENT_REMOVED",
+          message: "PreToolUse disappeared from the approved configuration."
+        }]
+      }
+    });
+    const result = message.result.structuredContent;
+    assert.equal(result.status, "REPAIR_REQUIRED");
+    assert.equal(result.consumer.name, "Software Repair Engineer");
+    assert.equal(result.consumer.interface, "sre_preflight");
+    assert.equal(result.rootCauseState, "UNKNOWN");
+    assert.match(result.repairRequest.failureEvidence[0], /HOOK_EVENT_REMOVED/);
+  });
+});
+
 test("ChatGPT MCP final gate rejects unknown factual claims", async () => {
   await withMcpServer(async (url) => {
     const message = await mcpCall(url, 4, "tools/call", {
