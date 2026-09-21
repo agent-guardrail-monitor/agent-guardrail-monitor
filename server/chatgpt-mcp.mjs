@@ -4,8 +4,9 @@ import { toNodeHandler } from "@modelcontextprotocol/node";
 import { z } from "zod";
 import { preActionPipeline, finalCompliancePipeline } from "../src/enforcement/pipeline.mjs";
 import { hashObject, validatePolicy, VERDICTS } from "../src/enforcement/policy.mjs";
+import { buildRepairHandoff } from "../src/repair-handoff.mjs";
 
-const VERSION = "0.2.0-alpha.2";
+const VERSION = "0.2.0-alpha.3";
 const DEFAULT_POLICY_URL = new URL("../policy/chatgpt.default.json", import.meta.url);
 
 function loadPolicy() {
@@ -65,6 +66,25 @@ const claimSchema = z.object({
   source: z.string().max(1000).optional(),
   evidence: z.string().max(4000).optional()
 });
+
+const repairRegressionSchema = z.object({
+  code: z.string().min(1).max(120),
+  runtime: z.string().min(1).max(80).default("unknown"),
+  message: z.string().min(1).max(2000)
+});
+
+const repairFindingSchema = z.object({
+  severity: z.literal("FAIL"),
+  code: z.string().min(1).max(120),
+  runtime: z.string().min(1).max(80).default("unknown"),
+  message: z.string().min(1).max(2000)
+});
+
+const repairProofSchema = z.object({
+  runtime: z.string().min(1).max(80),
+  status: z.literal("FAIL"),
+  reason: z.string().min(1).max(2000)
+});
 export function buildAgmMcpServer() {
   const server = new McpServer(
     { name: "agent-guardrail-monitor", version: VERSION },
@@ -72,6 +92,8 @@ export function buildAgmMcpServer() {
       instructions:
         "When this app is enabled for a conversation, use agm_preflight before a material action or answer. " +
         "If the verdict is BLOCK, REQUIRE_REVIEW, or UNKNOWN, do not represent the action as approved or completed. " +
+        "When AGM-observed regression evidence requires software repair, use agm_prepare_repair_handoff and route only its repairRequest to the separate Software Repair Engineer. " +
+        "After repair, AGM must retest the original control before a verified completion claim. " +
         "Before releasing a final answer with material factual or execution claims, use agm_validate_output. " +
         "Only release when it returns release=true. This app does not override ChatGPT platform policy and cannot " +
         "intercept turns in which the host does not invoke the app."
@@ -199,6 +221,30 @@ export function buildAgmMcpServer() {
         enforcementState: "DECISION_PRODUCED"
       });
     }
+  );
+
+  server.registerTool(
+    "agm_prepare_repair_handoff",
+    {
+      title: "Prepare Software Repair Engineer handoff",
+      description:
+        "Transforms AGM-observed regression evidence into a structured Software Repair Engineer preflight payload. " +
+        "This tool does not diagnose root cause, patch files, or claim that a repair was completed.",
+      inputSchema: z.object({
+        regressions: z.array(repairRegressionSchema).max(50).default([]),
+        findings: z.array(repairFindingSchema).max(50).default([]),
+        proofs: z.array(repairProofSchema).max(30).default([]),
+        context: z.object({
+          cwd: z.string().max(500).optional(),
+          baselineGeneratedAt: z.string().max(80).optional(),
+          currentGeneratedAt: z.string().max(80).optional(),
+          objective: z.string().max(3000).optional(),
+          systemKind: z.string().max(120).optional()
+        }).default({})
+      }),
+      annotations: annotations()
+    },
+    async (input) => response(buildRepairHandoff(input))
   );
 
   server.registerTool(
