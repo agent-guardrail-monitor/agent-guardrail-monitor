@@ -7,6 +7,7 @@ import {
 } from "./core.mjs";
 import { proveInstalled } from "./prove.mjs";
 import { runEnforcementCommand } from "./enforcement/cli.mjs";
+import { buildRepairHandoff, saveRepairHandoff } from "./repair-handoff.mjs";
 
 const DEFAULT_DIR = ".agent-guardrail-monitor";
 
@@ -87,7 +88,7 @@ Usage:
   agm snapshot [--cwd DIR] [--out FILE] [--prove] [--live]
   agm baseline [--cwd DIR] [--out FILE] [--prove] [--live]
   agm diff BASELINE CURRENT [--json]
-  agm gate --baseline FILE [--cwd DIR] [--prove] [--live] [--json]
+  agm gate --baseline FILE [--cwd DIR] [--prove] [--live] [--json] [--repair-handoff FILE]
   agm policy validate|compile|check ...
   agm hook --runtime RUNTIME --policy POLICY.json
   agm install-hook --runtime claude|copilot|codex [--cwd DIR] [--policy POLICY.json]
@@ -174,13 +175,36 @@ export async function main(args) {
     const baseline = loadSnapshot(baselineFile);
     const current = await makeSnapshot(rest);
     const diff = compareSnapshots(baseline, current);
-    if (json) console.log(JSON.stringify({ current, diff }, null, 2));
-    else {
+    const gateFailed = diff.verdict === "FAIL" || failCount(current) > 0;
+    let repairHandoff = null;
+    let repairHandoffFile = null;
+
+    if (gateFailed) {
+      repairHandoff = buildRepairHandoff({
+        regressions: diff.regressions,
+        findings: current.findings,
+        proofs: current.proofs,
+        context: {
+          cwd: current.cwd,
+          baselineGeneratedAt: baseline.generatedAt,
+          currentGeneratedAt: current.generatedAt
+        }
+      });
+      repairHandoffFile = saveRepairHandoff(
+        repairHandoff,
+        value(rest, "--repair-handoff", path.join(DEFAULT_DIR, "repair-handoff.json"))
+      );
+    }
+
+    if (json) {
+      console.log(JSON.stringify({ current, diff, repairHandoff, repairHandoffFile }, null, 2));
+    } else {
       printSnapshot(current);
       console.log("");
       printDiff(diff);
+      if (repairHandoffFile) console.log(`Repair handoff: ${repairHandoffFile}`);
     }
-    if (diff.verdict === "FAIL" || failCount(current)) process.exitCode = 1;
+    if (gateFailed) process.exitCode = 1;
     return;
   }
 
