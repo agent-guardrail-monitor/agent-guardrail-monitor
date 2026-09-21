@@ -47,11 +47,23 @@ See [Enforcement installation](docs/INSTALL-ENFORCEMENT-v0.2.md) and [Architectu
 
 ## ChatGPT MCP app
 
-v0.2.0-alpha.2 adds a remote, read-only MCP decision app for ChatGPT at `https://agent-guardrail-monitor.onrender.com/mcp`.
+v0.2.0-alpha.3 adds a remote, read-only MCP decision app for ChatGPT at `https://agent-guardrail-monitor.onrender.com/mcp`.
 
-It exposes `agm_status`, `agm_preflight`, and `agm_validate_output`. A mandatory skill without load, execution, and proof is blocked before release; unknown factual claims presented as facts are blocked by the final gate.
+It exposes `agm_status`, `agm_preflight`, `agm_prepare_repair_handoff`, and `agm_validate_output`. A mandatory skill without load, execution, and proof is blocked before release; unknown factual claims presented as facts are blocked by the final gate.
 
 The ChatGPT integration reports `AVAILABLE_WHEN_INVOKED`: it produces deterministic decisions whenever the host calls AGM, while ordinary ChatGPT turns outside the MCP call path remain outside AGM authority. See [ChatGPT app installation](docs/INSTALL-CHATGPT-APP.md).
+
+### Software Repair Engineer handoff
+
+When AGM observes a repair-triggering regression, it now prepares a machine-readable handoff for the separate Software Repair Engineer. AGM remains the evidence and verification boundary; the repair agent owns diagnosis, patching, regression testing, and hardening.
+
+The handoff deliberately keeps root cause as `UNKNOWN` until the repair investigation establishes it. The repair flow is:
+
+```text
+detect -> prove -> prepare repair handoff -> diagnose -> repair -> retest -> validate
+```
+
+The ChatGPT MCP tool `agm_prepare_repair_handoff` returns a payload whose `repairRequest` is shaped for `sre_preflight`. The CLI writes the same contract automatically when `agm gate` fails.
 
 ```text
 Claude Code  2.1.263 -> 2.1.264
@@ -228,6 +240,14 @@ For runtime proof:
 ```bash
 agm gate --baseline baseline.json --prove --live
 ```
+
+When the gate fails, AGM writes the repair contract to:
+
+```text
+.agent-guardrail-monitor/repair-handoff.json
+```
+
+Use `--repair-handoff FILE` to choose another path. The artifact contains only AGM failure evidence and repair/verification metadata; it does not claim a root cause or execute a patch.
 
 ## What currently fails the gate
 

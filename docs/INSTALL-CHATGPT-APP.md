@@ -12,13 +12,14 @@ The endpoint uses MCP Streamable HTTP and supports the current stateless legacy 
 
 ## Exposed tools
 
-AGM exposes three read-only decision tools:
+AGM exposes four read-only decision/integration tools:
 
 - `agm_status`: returns policy identity, version, hash, and enforcement boundary.
 - `agm_preflight`: evaluates the planned action before execution or response.
+- `agm_prepare_repair_handoff`: converts AGM-observed regression evidence into a Software Repair Engineer preflight payload without patching anything.
 - `agm_validate_output`: validates material claims and completion evidence before release.
 
-All three tools declare `readOnlyHint: true`, `destructiveHint: false`, and `openWorldHint: false`.
+All four tools declare `readOnlyHint: true`, `destructiveHint: false`, and `openWorldHint: false`.
 ## Connect in ChatGPT
 
 Use ChatGPT on the web and enable Developer Mode for custom apps if your plan/workspace allows it.
@@ -33,6 +34,7 @@ Use ChatGPT on the web and enable Developer Mode for custom apps if your plan/wo
 7. Confirm that the scan finds exactly:
    - `agm_status`
    - `agm_preflight`
+   - `agm_prepare_repair_handoff`
    - `agm_validate_output`
 8. Create the app and keep it enabled in **Settings → Apps → Enabled Apps**.
 
@@ -43,8 +45,10 @@ When the app is invoked, its server instructions direct the host to:
 
 1. call `agm_preflight` before a material action or answer;
 2. stop when AGM returns `BLOCK`, `REQUIRE_REVIEW`, or `UNKNOWN`;
-3. call `agm_validate_output` before releasing a final answer with material factual or execution claims;
-4. release only when the final gate returns `release=true`.
+3. when verified AGM regression evidence requires repair, call `agm_prepare_repair_handoff` and pass its `repairRequest` to the separate Software Repair Engineer;
+4. after repair, rerun AGM verification against the approved baseline;
+5. call `agm_validate_output` before releasing a final answer with material factual or execution claims;
+6. release only when the final gate returns `release=true`.
 
 Example: if a task declares a mandatory skill and there is no `loaded + executed + executionProof` record for that skill, `agm_preflight` returns `BLOCK` with `MANDATORY_SKILL_MISSING`.
 

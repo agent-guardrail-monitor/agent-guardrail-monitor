@@ -5,7 +5,7 @@ import crypto from "node:crypto";
 import { spawnSync } from "node:child_process";
 
 export const SCHEMA_VERSION = 1;
-export const PRODUCT_VERSION = "0.2.0-alpha.2";
+export const PRODUCT_VERSION = "0.2.0-alpha.3";
 
 export const DOCS = {
   claude: "https://code.claude.com/docs/en/hooks",
