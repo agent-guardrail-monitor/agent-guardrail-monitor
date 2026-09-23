@@ -1,9 +1,9 @@
 import { McpServer, createMcpHandler } from "@modelcontextprotocol/server";
 import { toNodeHandler } from "@modelcontextprotocol/node";
 import { z } from "zod";
-import { evaluateGuard } from "./engine.mjs";
+import { evaluateForAccount } from "./service.mjs";
 import { RULESET_VERSION, RULE_CATALOG } from "./rule-catalog.mjs";
-import { appendGuardEvent, listMemory, upsertMemory } from "./db.mjs";
+import { listMemory, upsertMemory } from "./db.mjs";
 
 function response(payload) {
   return {
@@ -57,9 +57,7 @@ export function buildCognitiveBlockerMcpServer(context) {
       annotations: readOnly
     },
     async ({ payload }) => {
-      const result = evaluateGuard(payload);
-      await appendGuardEvent(accountId, { result, projectId: payload?.projectId || null });
-      return response(result);
+      return response(await evaluateForAccount(accountId, payload));
     }
   );
 
