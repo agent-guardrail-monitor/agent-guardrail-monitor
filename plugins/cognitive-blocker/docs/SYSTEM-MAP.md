@@ -22,11 +22,15 @@ flowchart TD
   AUTH --> TENANT[Tenant Context: account_id]
   TENANT --> RBAC[Internal RBAC]
   RBAC --> FLAGS[Internal Feature Catalog]
-  FLAGS --> SERVICE[Cognitive Service]
+  FLAGS --> TURN[Automatic Turn Bootstrap]
+  TURN --> CHAT[Auto-registered Chat Context]
+  CHAT --> SERVICE[Cognitive Service]
   SERVICE --> MEMORY[Account + Project Memory]
+  CHAT --> HISTORY[Chat-local Accepted Turn History]
   SERVICE --> ENGINE[Canonical 59-rule Blocking Engine]
   ENGINE --> RECOVERY[Controlled Recovery Controller]
   MEMORY --> DB[(PostgreSQL)]
+  HISTORY --> DB
   RECOVERY --> EVENTS[Guard Events]
   RECOVERY --> DB
   EVENTS --> DB
@@ -38,6 +42,7 @@ flowchart TD
   TESTS --> RBAC
   TESTS --> FLAGS
   TESTS --> ENGINE
+  TESTS --> CHAT
   TESTS --> RLS
 ```
 
@@ -166,3 +171,50 @@ sequenceDiagram
     R-->>H: SAFE_STOP + canExecute=false
   end
 ```
+
+
+## ALWAYS_ON account-wide sequence
+
+```mermaid
+sequenceDiagram
+  participant U as User
+  participant H as Platform Adapter
+  participant P as Plugin
+  participant C as Chat Context
+  participant M as Account/Project Memory
+  participant A as AI
+  participant E as 59-rule Engine
+
+  U->>H: message in any controlled chat
+  H->>P: automatic turn begin
+  P->>C: identify or auto-register chat
+  P->>C: load recent + relevant older turns
+  P->>M: load durable memory
+  P-->>H: rehydrated context
+  H->>A: current message + rehydrated context
+  A-->>H: candidate response/action
+  H->>P: automatic candidate check
+  P->>E: canonical evaluation
+  alt ALLOW
+    E-->>P: ALLOW
+    P->>C: persist accepted assistant turn
+    P-->>H: canExecute=true
+  else BLOCK
+    E-->>P: BLOCK
+    P-->>H: surgical recovery plan
+  end
+```
+
+## Memory boundary
+
+```
+ACCOUNT
+├── durable account memory (may apply across chats)
+├── projects / decisions / restrictions / frozen elements
+└── conversations
+    ├── chat A accepted episodic history
+    ├── chat B accepted episodic history
+    └── chat C accepted episodic history
+```
+
+Raw episodic history never crosses chat boundaries automatically.
