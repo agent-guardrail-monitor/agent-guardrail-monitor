@@ -47,7 +47,7 @@ See [Enforcement installation](docs/INSTALL-ENFORCEMENT-v0.2.md) and [Architectu
 
 ## ChatGPT MCP app
 
-v0.3.0-alpha.1 extends the remote MCP app at `https://agent-guardrail-monitor.onrender.com/mcp` with the integrated repair protocol.
+v0.3.0-alpha.2 extends the remote MCP app at `https://agent-guardrail-monitor.onrender.com/mcp` with the integrated repair protocol.
 
 It exposes AGM policy gates plus `agm_prepare_repair`, `agm_repair_preflight`, and `agm_validate_repair`. The legacy `agm_prepare_repair_handoff` name remains only as a compatibility alias; its consumer is the integrated AGM repair engine.
 
@@ -77,7 +77,7 @@ The default mode is `pull_request`. A repository must explicitly configure `auto
 
 Configuration lives at `.agent-guardrail-monitor/config.json`. Workflow-file mutation is blocked in v0.3 alpha. A repair is never released as `VERIFIED FIX` from model output alone; AGM requires executable post-patch evidence and, for auto-merge, re-verifies the merged state.
 
-The hosted repair provider uses the OpenAI Responses API with `store: false`. The default model is `gpt-5.6-sol`, configurable with `AGM_REPAIR_MODEL`. See [Integrated Repair Engine — v0.3](docs/REPAIR-ENGINE-v0.3.md).
+The repair engine is deterministic-first: when the regression can be proven and restored from the immediately previous approved guardrail state, AGM repairs from that baseline without an external model. An OpenAI Responses API model is an optional fallback for cases without a deterministic plan; fallback requests use `store: false`. See [Integrated Repair Engine — v0.3](docs/REPAIR-ENGINE-v0.3.md).
 
 ## Current support
 
