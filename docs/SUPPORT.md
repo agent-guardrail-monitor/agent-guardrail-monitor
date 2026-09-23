@@ -1,9 +1,16 @@
-# Agent Guardrail Monitor Support
+# Ajuda — O Guardião - W
 
-Support, bug reports, and feature requests are handled through the public issue tracker:
+Precisa de ajuda, encontrou uma FALHA ou quer sugerir uma melhoria?
+
+Use este canal:
 
 https://github.com/agent-guardrail-monitor/agent-guardrail-monitor/issues
 
-When reporting a problem, include the Agent Guardrail Monitor version, affected runtime, operating system, reproduction steps, and whether the result was PASS, FAIL, or UNKNOWN.
+Ao pedir ajuda, explique em poucas linhas:
 
-Do not include credentials, private keys, webhook secrets, access tokens, or confidential repository content in public issues.
+- o que você esperava que acontecesse;
+- o que aconteceu;
+- qual robô de IA estava sendo usado;
+- qual estado apareceu: APROVADO, FALHA ou DESCONHECIDO.
+
+Evite publicar senhas, chaves ou outros dados secretos.

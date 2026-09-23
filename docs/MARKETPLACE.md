@@ -1,110 +1,125 @@
-# GitHub Marketplace Submission — Agent Guardrail Monitor
+# Publicação no GitHub Marketplace — O Guardião - W
 
-This document records the publication values for the official Agent Guardrail Monitor GitHub App.
+Este documento guarda os dados de publicação do produto.
 
-## Product identity
+## Nome público
 
-- Product: **Agent Guardrail Monitor**
-- GitHub App slug: `agent-guardrail-monitor`
-- Repository: `agent-guardrail-monitor/agent-guardrail-monitor`
-- Initial Marketplace plan: **Free**
-- Current public distribution: `v0.2.0-alpha.3`
-- Next Marketplace submission target: `v0.3.0-alpha.2`
+- Nome: **O Guardião - W**
+- Identificador técnico atual: `agent-guardrail-monitor`
+- Plano inicial: **Grátis**
+- Versão: `0.3.0-alpha.2`
 
-## Positioning
+## Texto curto
 
-Short description:
+> Sua IA trabalha. O Guardião confere se ela continua respeitando as regras.
 
-> Detect, prove, and repair AI coding-agent guardrail regressions.
+## Descrição principal
 
-Core value:
+O Guardião - W acompanha as travas de segurança dos robôs de IA usados pela empresa.
 
-Agent Guardrail Monitor independently checks whether approved hooks, policies, and guardrail configuration still have evidence of working after changes to Claude Code, OpenAI Codex, GitHub Copilot CLI, repository configuration, or runtime state.
+Quando um robô faz o que não podia, O Guardião identifica a falha, guarda a prova e prepara o conserto.
 
-When a new repairable regression is proven on the default branch, the integrated repair engine can diagnose the change using bounded before/after repository context, create a dedicated repair branch, apply a structured patch, re-run verification, and open a pull request. Repositories may explicitly opt into automatic merge after verification.
+O fluxo é simples:
 
-PASS, FAIL, and UNKNOWN remain separate evidence states.
+**acha → prova → conserta → testa → fecha**
 
-## Required GitHub App permissions for v0.3
+O usuário vê apenas três estados:
 
-- Metadata: read
-- Contents: read/write
-- Checks: read/write
-- Pull requests: read/write
+- **APROVADO**: a trava de segurança está funcionando conforme a prova disponível.
+- **FALHA**: o robô fez o que não podia ou uma trava deixou de funcionar.
+- **DESCONHECIDO**: ainda falta prova para confirmar.
 
-The write permissions are required for repair branches and pull requests. Existing installations must approve the permission update before automated repair can operate.
+O Guardião nunca transforma falta de prova em aprovação.
 
-## Production URLs
+## Como o conserto funciona
 
-- Homepage: `https://agent-guardrail-monitor.onrender.com/`
-- Setup URL: `https://agent-guardrail-monitor.onrender.com/setup`
-- Privacy: `https://agent-guardrail-monitor.onrender.com/privacy`
-- Terms: `https://agent-guardrail-monitor.onrender.com/terms`
-- EULA: `https://agent-guardrail-monitor.onrender.com/eula`
-- Support: `https://agent-guardrail-monitor.onrender.com/support`
-- OAuth callback: `https://agent-guardrail-monitor.onrender.com/oauth/callback`
-- Marketplace webhook: `https://agent-guardrail-monitor.onrender.com/webhook`
+O Guardião compara o estado atual com o último estado aprovado.
 
-## Listing configuration
+Quando o problema pode ser resolvido com segurança, ele prepara o conserto usando esse estado aprovado como referência.
 
-1. Attach the listing to the GitHub App **Agent Guardrail Monitor**, App ID `5007193`.
-2. Use a **Free** initial plan.
-3. Configure the Marketplace webhook as active, JSON content type, pointing to the production webhook URL.
-4. Configure the GitHub App Setup URL to the production Setup URL.
-5. Configure the GitHub App callback URL to the production OAuth callback URL.
-6. Generate a GitHub App client secret and store it only as the Render secret environment variable `GITHUB_CLIENT_SECRET`.
-7. The public Client ID is `Iv23lilPmMCpZGickCZN`.
-8. Update the GitHub App permissions to the v0.3 permission set above and approve the update on the test installation.
-9. Deterministic baseline repair operates without `OPENAI_API_KEY`.
-10. Optionally configure `OPENAI_API_KEY` and `AGM_REPAIR_MODEL` to enable model fallback for non-deterministic repair cases.
-11. Use the production privacy, EULA, terms, and support URLs.
-12. Supply the publisher contact email in GitHub's listing form.
-13. Upload the required listing logo, feature card, and product screenshots.
-14. Accept the GitHub Marketplace Developer Agreement under the publishing account.
-15. Request publication only after OAuth, webhook handling, repair branch creation, PR creation, verification, and permission updates are proven in production.
+Por padrão, o conserto fica separado para revisão.
 
-## Repair defaults
+O modo totalmente automático só funciona quando o usuário escolhe essa opção.
 
-The default repository behavior is:
+## Público inicial
 
-```json
-{
-  "repair": {
-    "enabled": true,
-    "mode": "pull_request",
-    "waitForChecks": true
-  }
-}
-```
+Empresas brasileiras que usam robôs de IA para programar, incluindo:
 
-The repository may use `.agent-guardrail-monitor/config.json` to select:
+- Claude Code
+- OpenAI Codex
+- GitHub Copilot
 
-- `off`
-- `pull_request`
-- `auto_merge`
+## Mensagem principal da página
 
-Automatic merge is never inferred from missing configuration.
+### Título
 
-See [Integrated Repair Engine — v0.3](REPAIR-ENGINE-v0.3.md).
+**Sua IA trabalha. O Guardião confere se ela continua respeitando as regras.**
 
-## Scope boundary
+### Subtítulo
 
-The initial Marketplace plan is free. The v0.3 alpha provides automated repair for guardrail regressions within the evidence and repository surfaces supported by Agent Guardrail Monitor.
+**Quando um robô faz o que não podia, O Guardião acha, prova, conserta, testa e fecha.**
 
-The repair engine is intentionally bounded. It does not claim arbitrary unrestricted code modification across unrelated repository areas. Workflow-file mutation is blocked in v0.3 alpha.
+### Chamada
 
-Paid plans require a separate billing and entitlement implementation before activation.
+**Conectar O Guardião - W ao GitHub**
 
-## OAuth runtime configuration
+## Configuração técnica da publicação
 
-Required production secret:
+- App ID atual: `5007193`
+- Identificador técnico atual: `agent-guardrail-monitor`
+- Repositório: `agent-guardrail-monitor/agent-guardrail-monitor`
+- Plano inicial: **Free**
+- Página inicial: `https://agent-guardrail-monitor.onrender.com/`
+- Conexão: `https://agent-guardrail-monitor.onrender.com/setup`
+- Privacidade: `https://agent-guardrail-monitor.onrender.com/privacy`
+- Termos: `https://agent-guardrail-monitor.onrender.com/terms`
+- Contrato: `https://agent-guardrail-monitor.onrender.com/eula`
+- Ajuda: `https://agent-guardrail-monitor.onrender.com/support`
+- Retorno de conexão: `https://agent-guardrail-monitor.onrender.com/oauth/callback`
+- Recebimento de eventos: `https://agent-guardrail-monitor.onrender.com/webhook`
 
-- `GITHUB_CLIENT_SECRET`: generated from the official Agent Guardrail Monitor GitHub App settings.
+## Permissões necessárias
 
-Optional overrides:
+Para verificar e preparar consertos:
 
-- `GITHUB_CLIENT_ID`: defaults to the verified public client ID above.
-- `GITHUB_OAUTH_CALLBACK_URL`: defaults to the production callback URL above.
-- `GITHUB_OAUTH_STATE_SECRET`: optional dedicated signing secret; if omitted, the existing GitHub webhook secret is used for OAuth state signing.
+- leitura de informações básicas;
+- leitura e escrita dos arquivos necessários para o conserto;
+- leitura e escrita das verificações;
+- leitura e escrita das propostas de alteração.
 
-The setup flow uses signed state, PKCE, a Secure/HttpOnly/SameSite=Lax transaction cookie, and verifies the installation through the authorized user's GitHub App installation endpoint. User access tokens are not persisted by the flow.
+As permissões de escrita são usadas pelo conserto do O Guardião.
+
+## Estado atual da publicação
+
+O código do produto está em produção.
+
+Ainda faltam, na área administrativa do GitHub:
+
+1. autenticar a conta responsável;
+2. atualizar o nome público para **O Guardião - W**;
+3. gerar o segredo necessário para concluir a conexão do Marketplace;
+4. aprovar as novas permissões;
+5. subir logo, imagem principal e capturas;
+6. confirmar o plano gratuito;
+7. aceitar o contrato do GitHub Marketplace;
+8. enviar para revisão.
+
+## Regra de comunicação
+
+Toda linguagem pública deve seguir este vocabulário:
+
+- guardrail = trava de segurança
+- quebrou guardrail = robô fez o que não podia
+- hook = gatilho automático
+- policy = regra
+- regression = voltou a quebrar
+- evidence = prova
+- check = verificação
+- repair = conserto
+- PASS = APROVADO
+- FAIL = FALHA
+- UNKNOWN = DESCONHECIDO
+
+Fluxo público:
+
+**acha → prova → conserta → testa → fecha**
