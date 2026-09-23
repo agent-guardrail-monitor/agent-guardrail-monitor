@@ -31,10 +31,12 @@ maybeTest("Testcontainers: real PostgreSQL enforces cross-tenant RLS", { timeout
   const accountB = crypto.randomUUID();
   const projectA = crypto.randomUUID();
   const projectB = crypto.randomUUID();
+  const recoveryA = crypto.randomUUID();
 
   try {
     await adminPool.query(readMigration("001_init.sql"));
     await adminPool.query(readMigration("002_internal_control_plane.sql"));
+    await adminPool.query(readMigration("003_recovery_sessions.sql"));
 
     await adminPool.query(`CREATE ROLE ${appRole} LOGIN PASSWORD '${appPassword}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS`);
     await adminPool.query(`GRANT USAGE ON SCHEMA public TO ${appRole}`);
@@ -98,6 +100,32 @@ maybeTest("Testcontainers: real PostgreSQL enforces cross-tenant RLS", { timeout
           /row-level security|policy/i
         );
 
+        await clientA.query(
+          `INSERT INTO cognitive_recovery_sessions
+             (id, account_id, project_id, root_fingerprint, last_request_fingerprint,
+              phase, attempt, max_attempts, last_violations, invalid_resources)
+           VALUES ($1,$2,$3,'root-a','last-a','CORRECT',1,3,'[]'::jsonb,'[]'::jsonb)`,
+          [recoveryA, accountA, projectA]
+        );
+
+        const recoveryVisibleToA = await clientA.query(
+          "SELECT id, account_id, phase, attempt FROM cognitive_recovery_sessions"
+        );
+        assert.equal(recoveryVisibleToA.rows.length, 1);
+        assert.equal(recoveryVisibleToA.rows[0].id, recoveryA);
+        assert.equal(recoveryVisibleToA.rows[0].account_id, accountA);
+
+        await assert.rejects(
+          clientA.query(
+            `INSERT INTO cognitive_recovery_sessions
+               (account_id, root_fingerprint, last_request_fingerprint,
+                phase, attempt, max_attempts, last_violations, invalid_resources)
+             VALUES ($1,'root-b','last-b','CORRECT',1,3,'[]'::jsonb,'[]'::jsonb)`,
+            [accountB]
+          ),
+          /row-level security|policy/i
+        );
+
         await clientA.query("ROLLBACK");
       } finally {
         clientA.release();
@@ -116,6 +144,12 @@ maybeTest("Testcontainers: real PostgreSQL enforces cross-tenant RLS", { timeout
         assert.equal(visibleToB.rows.length, 1);
         assert.equal(visibleToB.rows[0].account_id, accountB);
         assert.equal(visibleToB.rows[0].name, "tenant-b-project");
+
+        const recoveryVisibleToB = await clientB.query(
+          "SELECT id, account_id FROM cognitive_recovery_sessions"
+        );
+        assert.equal(recoveryVisibleToB.rows.length, 0);
+
         await clientB.query("ROLLBACK");
       } finally {
         clientB.release();
