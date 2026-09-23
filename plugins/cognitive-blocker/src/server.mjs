@@ -1,7 +1,7 @@
 import http from "node:http";
 import crypto from "node:crypto";
 import { URL } from "node:url";
-import { evaluateGuard } from "./engine.mjs";
+import { evaluateForAccount } from "./service.mjs";
 import { RULESET_VERSION, RULE_CATALOG } from "./rule-catalog.mjs";
 import {
   appendGuardEvent,
@@ -100,11 +100,8 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === "POST" && url.pathname === "/v1/check") {
       const body = await readJson(req);
-      const result = evaluateGuard(body);
-      await appendGuardEvent(instance.account_id, {
-        result,
-        projectId: body.projectId || null,
-        taskContractId: body.taskContractId || null,
+      const result = await evaluateForAccount(instance.account_id, {
+        ...body,
         requestFingerprint: fingerprint(body)
       });
       return send(res, result.decision === "ALLOW" ? 200 : 409, result);
