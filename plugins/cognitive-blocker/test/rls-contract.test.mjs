@@ -40,3 +40,10 @@ test("task-to-guard references are tenant-composite", () => {
   assert.match(sql, /FOREIGN KEY \(task_contract_id, account_id\)/);
   assert.match(sql, /REFERENCES cognitive_task_contracts\(id, account_id\)/);
 });
+
+test("PLpgSQL migration blocks use complete dollar-quote delimiters", () => {
+  assert.equal((sql.match(/DO \\$\\$/g) || []).length, 3);
+  assert.equal((sql.match(/END \\$\\$;/g) || []).length, 3);
+  assert.doesNotMatch(sql, /DO \\$\n/);
+  assert.doesNotMatch(sql, /END \\$;/);
+});
