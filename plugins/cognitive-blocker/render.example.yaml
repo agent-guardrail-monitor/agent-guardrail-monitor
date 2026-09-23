@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: cognitive-blocker-plugin
+    runtime: node
+    plan: free
+    rootDir: plugins/cognitive-blocker
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: INSTALL_SECRET
+        sync: false
