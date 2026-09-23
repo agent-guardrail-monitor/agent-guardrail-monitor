@@ -7,7 +7,7 @@ import { hashObject, validatePolicy, VERDICTS } from "../src/enforcement/policy.
 import { buildRepairRequest } from "../src/repair-handoff.mjs";
 import { FINAL_REPAIR_STATES, repairPreflight, validateRepairEvidence } from "../src/repair/protocol.mjs";
 
-const VERSION = "0.3.0-alpha.1";
+const VERSION = "0.3.0-alpha.2";
 const DEFAULT_POLICY_URL = new URL("../policy/chatgpt.default.json", import.meta.url);
 
 function loadPolicy() {
