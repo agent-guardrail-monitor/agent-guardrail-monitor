@@ -137,3 +137,37 @@ test("invalid repository repair config is surfaced instead of silently enabling 
   const config = parseRepairConfig("{");
   assert.equal(config.configError, "Invalid .agent-guardrail-monitor/config.json");
 });
+
+
+test("repair model receives both pre-regression baseline and broken commit context", async () => {
+  const refs = [];
+  const repoClient = fakeRepoClient();
+  repoClient.readRepairContext = async ({ ref }) => {
+    refs.push(ref);
+    return [{ path: ".claude/settings.json", sha: ref, content: ref === "before111" ? "{\"hooks\":{\"PreToolUse\":[]}}" : "{\"hooks\":{}}" }];
+  };
+  let observedContext;
+  const model = {
+    async proposeRepair(input) {
+      observedContext = input.repositoryContext;
+      return validPlan;
+    }
+  };
+
+  await executeRepairCycle({
+    owner: "acme",
+    repo: "demo",
+    repairBaseSha: "after222",
+    baselineRef: "before111",
+    failureEvidence: ["[claude] HOOK_EVENT_REMOVED: PreToolUse disappeared"],
+    repoClient,
+    repairModel: model,
+    verify: async () => ({ pass: true, evidence: "restored" }),
+    options: { autoMerge: false, waitForChecks: false }
+  });
+
+  assert.deepEqual(refs, ["after222", "before111"]);
+  assert.equal(observedContext.currentRef, "after222");
+  assert.equal(observedContext.baselineRef, "before111");
+  assert.match(observedContext.baseline[0].content, /PreToolUse/);
+});
