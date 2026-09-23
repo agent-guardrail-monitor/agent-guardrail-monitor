@@ -6,9 +6,10 @@ import {
 } from "./conversation-db.mjs";
 import { listMemory } from "./db.mjs";
 
-function stableKey(prefix, externalRef, content) {
+function stableKey(prefix, externalRef, requestFingerprint) {
   if (externalRef) return String(externalRef);
-  return prefix + ":" + crypto.createHash("sha256").update(String(content || "")).digest("hex");
+  if (requestFingerprint) return prefix + ":" + String(requestFingerprint);
+  return prefix + ":" + crypto.randomUUID();
 }
 
 function memoryEnvelope(items) {
@@ -33,7 +34,7 @@ export async function beginAccountTurn(accountId, input = {}) {
   const userTurnKey = stableKey(
     "user",
     input.userTurnRef,
-    (input.requestFingerprint || conversation.platform_conversation_ref) + ":" + userMessage
+    input.requestFingerprint
   );
 
   if (userMessage) {
@@ -87,7 +88,7 @@ export async function acceptAssistantTurn(accountId, input = {}) {
   const turnKey = stableKey(
     "assistant",
     input.assistantTurnRef,
-    (input.requestFingerprint || input.conversationId) + ":" + String(input.assistantMessage || "")
+    input.requestFingerprint
   );
 
   return appendAcceptedTurn(accountId, input.conversationId, {
