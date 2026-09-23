@@ -78,7 +78,7 @@ export async function evaluateForAccount(accountId, payload) {
       platformConversationRef: candidatePayload.platformConversationRef,
       title: candidatePayload.conversationTitle,
       metadata: candidatePayload.conversationMetadata,
-      userMessage: candidatePayload.userMessage,
+      userMessage: recoverySessionId ? "" : candidatePayload.userMessage,
       userTurnRef: candidatePayload.userTurnRef,
       requestFingerprint: candidatePayload.userRequestFingerprint || candidateFingerprint,
       projectId: candidatePayload.projectId,
