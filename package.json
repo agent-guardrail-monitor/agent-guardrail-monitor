@@ -1,6 +1,6 @@
 {
     "name":  "agent-guardrail-monitor",
-    "version":  "0.2.0-alpha.3",
+    "version":  "0.3.0-alpha.1",
     "description":  "Detect coding-agent guardrail drift and enforce deterministic pre-action policy on controlled runtimes.",
     "type":  "module",
     "bin":  {
