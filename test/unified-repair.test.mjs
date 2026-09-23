@@ -45,7 +45,7 @@ test("repair preflight reaches READY_TO_PATCH only after failure and root cause 
   assert.equal(result.stage, "READY_TO_PATCH");
 });
 
-test("repair plan blocks workflow mutation by default", () => {
+test("repair plan blocks workflow mutation in v0.3", () => {
   const result = validateRepairPlan({
     ...validPlan,
     files: [{
