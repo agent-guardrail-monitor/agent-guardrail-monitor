@@ -70,13 +70,12 @@ The default mode is `pull_request`. A repository must explicitly configure `auto
   "repair": {
     "enabled": true,
     "mode": "pull_request",
-    "waitForChecks": true,
-    "allowWorkflowChanges": false
+    "waitForChecks": true
   }
 }
 ```
 
-Configuration lives at `.agent-guardrail-monitor/config.json`. Workflow-file mutation is blocked unless explicitly allowed. A repair is never released as `VERIFIED FIX` from model output alone; AGM requires executable post-patch evidence and, for auto-merge, re-verifies the merged state.
+Configuration lives at `.agent-guardrail-monitor/config.json`. Workflow-file mutation is blocked in v0.3 alpha. A repair is never released as `VERIFIED FIX` from model output alone; AGM requires executable post-patch evidence and, for auto-merge, re-verifies the merged state.
 
 The hosted repair provider uses the OpenAI Responses API with `store: false`. The default model is `gpt-5.6-sol`, configurable with `AGM_REPAIR_MODEL`. See [Integrated Repair Engine — v0.3](docs/REPAIR-ENGINE-v0.3.md).
 
