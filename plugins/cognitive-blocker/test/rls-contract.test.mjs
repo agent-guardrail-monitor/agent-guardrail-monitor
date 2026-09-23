@@ -42,8 +42,8 @@ test("task-to-guard references are tenant-composite", () => {
 });
 
 test("PLpgSQL migration blocks use complete dollar-quote delimiters", () => {
-  assert.equal((sql.match(/DO \\$\\$/g) || []).length, 3);
-  assert.equal((sql.match(/END \\$\\$;/g) || []).length, 3);
-  assert.doesNotMatch(sql, /DO \\$\n/);
-  assert.doesNotMatch(sql, /END \\$;/);
+  assert.equal((sql.match(/DO \$\$/g) || []).length, 3);
+  assert.equal((sql.match(/END \$\$;/g) || []).length, 3);
+  assert.doesNotMatch(sql, /DO \$\n/);
+  assert.doesNotMatch(sql, /END \$;/);
 });
