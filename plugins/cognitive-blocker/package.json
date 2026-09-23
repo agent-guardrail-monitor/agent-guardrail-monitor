@@ -1,15 +1,18 @@
 {
   "name": "@guardiao/cognitive-blocker",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Account-scoped cognitive blocking layer for AI platforms.",
   "type": "module",
   "scripts": {
     "start": "node src/server.mjs",
     "test": "node --test",
-    "check": "node --check src/server.mjs && node --check src/engine.mjs && node --check src/mcp.mjs"
+    "test:db": "RUN_DB_E2E=1 node --test test/db-e2e.test.mjs",
+    "check": "node --check src/server.mjs && node --check src/engine.mjs && node --check src/mcp.mjs && node --check src/db.mjs && node --check src/service.mjs && node --check src/rbac.mjs && node --check src/feature-catalog.mjs && node --check src/internal-errors.mjs"
   },
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "@modelcontextprotocol/node": "^2.0.0",
     "@modelcontextprotocol/server": "^2.0.0",
