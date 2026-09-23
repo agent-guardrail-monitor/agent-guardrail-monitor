@@ -1,6 +1,6 @@
 {
   "name": "@guardiao/cognitive-blocker",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Account-scoped cognitive blocking layer for AI platforms.",
   "type": "module",
@@ -8,7 +8,7 @@
     "start": "node src/server.mjs",
     "test": "node --test",
     "test:db": "RUN_DB_E2E=1 node --test test/db-e2e.test.mjs",
-    "check": "node --check src/server.mjs && node --check src/engine.mjs && node --check src/mcp.mjs && node --check src/db.mjs && node --check src/service.mjs && node --check src/rbac.mjs && node --check src/feature-catalog.mjs && node --check src/internal-errors.mjs",
+    "check": "node --check src/server.mjs && node --check src/engine.mjs && node --check src/mcp.mjs && node --check src/db.mjs && node --check src/service.mjs && node --check src/rbac.mjs && node --check src/feature-catalog.mjs && node --check src/internal-errors.mjs && node --check src/recovery.mjs && node --check src/recovery-db.mjs",
     "test:property": "node --test test/property-based.test.mjs",
     "test:containers": "RUN_TESTCONTAINERS=1 node --test test/testcontainers-rls.test.mjs",
     "test:mutation": "stryker run"
