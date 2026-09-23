@@ -7,6 +7,7 @@ import { compareRepositoryScans } from "../src/repair/regression.mjs";
 import { parseRepairConfig } from "../src/repair/config.mjs";
 import { createOpenAIRepairModel } from "../src/repair/openai-model.mjs";
 import { validateRepairContentSafety } from "../src/repair/safety.mjs";
+import { proposeDeterministicRepair, createIntegratedRepairModel } from "../src/repair/deterministic-model.mjs";
 
 const validPlan = {
   summary: "Restore disabled hook configuration",
@@ -304,4 +305,73 @@ test("repair safety allows restoring an executable command from the approved bas
     }
   });
   assert.equal(safety.valid, true);
+});
+
+
+test("deterministic repair restores the exact pre-regression guardrail file", () => {
+  const approved = JSON.stringify({
+    hooks: { PreToolUse: [{ command: "node approved-hook.mjs" }] },
+    disableAllHooks: false
+  }, null, 2);
+  const broken = JSON.stringify({
+    hooks: {},
+    disableAllHooks: false
+  }, null, 2);
+
+  const plan = proposeDeterministicRepair({
+    failureEvidence: [
+      "[claude] HOOK_EVENT_REMOVED path=.claude/settings.json: PreToolUse disappeared from .claude/settings.json."
+    ],
+    repositoryContext: {
+      baselineRef: "before",
+      currentRef: "after",
+      baseline: [{ path: ".claude/settings.json", content: approved }],
+      current: [{ path: ".claude/settings.json", content: broken }]
+    }
+  });
+
+  assert.equal(plan.strategy, "deterministic_baseline_restore");
+  assert.equal(plan.files.length, 1);
+  assert.equal(plan.files[0].path, ".claude/settings.json");
+  assert.equal(plan.files[0].content, approved);
+  assert.match(plan.rootCause, /immediately previous commit/);
+});
+
+test("integrated repair model works without OpenAI when deterministic evidence is sufficient", async () => {
+  const model = createIntegratedRepairModel({ fallback: createOpenAIRepairModel({ apiKey: "" }) });
+  assert.equal(model.configured, true);
+  assert.equal(model.deterministic, true);
+  assert.equal(model.fallbackConfigured, false);
+
+  const plan = await model.proposeRepair({
+    failureEvidence: [
+      "[claude] CONFIG_REMOVED path=.claude/settings.json: .claude/settings.json was removed."
+    ],
+    repositoryContext: {
+      baseline: [{ path: ".claude/settings.json", content: "{\"hooks\":{}}" }],
+      current: []
+    }
+  });
+
+  assert.equal(plan.files[0].path, ".claude/settings.json");
+});
+
+test("integrated repair model uses optional model fallback only when deterministic restoration is unavailable", async () => {
+  let called = false;
+  const fallback = {
+    configured: true,
+    model: "fallback-test",
+    async proposeRepair() {
+      called = true;
+      return validPlan;
+    }
+  };
+  const model = createIntegratedRepairModel({ fallback });
+  const plan = await model.proposeRepair({
+    failureEvidence: ["[claude] NEW_FAIL_FINDING: complex failure without a restorable baseline path"],
+    repositoryContext: { baseline: [], current: [] }
+  });
+
+  assert.equal(called, true);
+  assert.equal(plan.rootCause, validPlan.rootCause);
 });

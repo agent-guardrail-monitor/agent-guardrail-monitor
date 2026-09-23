@@ -9,7 +9,7 @@ This document records the publication values for the official Agent Guardrail Mo
 - Repository: `agent-guardrail-monitor/agent-guardrail-monitor`
 - Initial Marketplace plan: **Free**
 - Current public distribution: `v0.2.0-alpha.3`
-- Next Marketplace submission target: `v0.3.0-alpha.1`
+- Next Marketplace submission target: `v0.3.0-alpha.2`
 
 ## Positioning
 
@@ -55,8 +55,8 @@ The write permissions are required for repair branches and pull requests. Existi
 6. Generate a GitHub App client secret and store it only as the Render secret environment variable `GITHUB_CLIENT_SECRET`.
 7. The public Client ID is `Iv23lilPmMCpZGickCZN`.
 8. Update the GitHub App permissions to the v0.3 permission set above and approve the update on the test installation.
-9. Configure the hosted repair provider with `OPENAI_API_KEY`.
-10. `AGM_REPAIR_MODEL` may override the default repair model.
+9. Deterministic baseline repair operates without `OPENAI_API_KEY`.
+10. Optionally configure `OPENAI_API_KEY` and `AGM_REPAIR_MODEL` to enable model fallback for non-deterministic repair cases.
 11. Use the production privacy, EULA, terms, and support URLs.
 12. Supply the publisher contact email in GitHub's listing form.
 13. Upload the required listing logo, feature card, and product screenshots.

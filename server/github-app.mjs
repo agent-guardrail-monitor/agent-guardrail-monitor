@@ -6,6 +6,7 @@ import { PRODUCT_VERSION } from "../src/core.mjs";
 import { summarizeMarketplacePurchase } from "../src/marketplace.mjs";
 import { createOAuthTransaction, verifyOAuthTransaction } from "../src/github-oauth.mjs";
 import { createOpenAIRepairModel } from "../src/repair/openai-model.mjs";
+import { createIntegratedRepairModel } from "../src/repair/deterministic-model.mjs";
 import { createGitHubRepairClient } from "../src/repair/github-client.mjs";
 import { executeRepairCycle } from "../src/repair/executor.mjs";
 import { parseRepairConfig } from "../src/repair/config.mjs";
@@ -24,7 +25,8 @@ const OAUTH_CALLBACK_URL = String(
   process.env.GITHUB_OAUTH_CALLBACK_URL || "https://agent-guardrail-monitor.onrender.com/oauth/callback"
 ).trim();
 const OAUTH_COOKIE_NAME = "agm_oauth";
-const REPAIR_MODEL = createOpenAIRepairModel();
+const OPENAI_REPAIR_MODEL = createOpenAIRepairModel();
+const REPAIR_MODEL = createIntegratedRepairModel({ fallback: OPENAI_REPAIR_MODEL });
 
 function readSecretFile(filePath) {
   try {
@@ -326,17 +328,6 @@ async function attemptAutomatedRepair({
   defaultBranch,
   currentScan
 }) {
-  if (!REPAIR_MODEL.configured) {
-    console.log(JSON.stringify({
-      event: "repair_engine_unavailable",
-      owner,
-      repo,
-      sha: afterSha,
-      reason: "OPENAI_API_KEY is not configured"
-    }));
-    return { status: "REPAIR_ENGINE_UNAVAILABLE" };
-  }
-
   const token = await installationToken(installationId);
   const baselineScan = await scanRepository(owner, repo, token, beforeSha);
   const activeScan = currentScan || await scanRepository(owner, repo, token, afterSha);
@@ -520,7 +511,7 @@ const server = http.createServer((req, res) => {
   }
 
   if (req.method === "GET" && url.pathname === "/health") {
-    return send(res, 200, JSON.stringify({ ok: true, configured: configured(), version: PRODUCT_VERSION, mcp: true, commit: DEPLOY_SHA, repair: { configured: REPAIR_MODEL.configured, model: REPAIR_MODEL.model } }), "application/json");
+    return send(res, 200, JSON.stringify({ ok: true, configured: configured(), version: PRODUCT_VERSION, mcp: true, commit: DEPLOY_SHA, repair: { configured: true, strategy: "deterministic-first", model: REPAIR_MODEL.model, deterministic: true, aiFallbackConfigured: REPAIR_MODEL.fallbackConfigured, aiFallbackModel: REPAIR_MODEL.fallbackModel } }), "application/json");
   }
 
   if (req.method === "GET" && url.pathname === "/setup") {
@@ -537,7 +528,7 @@ const server = http.createServer((req, res) => {
   }
 
   if (req.method === "GET" && url.pathname === "/privacy") {
-    return send(res, 200, `<!doctype html><meta charset="utf-8"><title>Privacy - Agent Guardrail Monitor</title><h1>Privacy</h1><p>Agent Guardrail Monitor processes guardrail configuration, before/after regression evidence, MCP decision inputs, and bounded repository context needed for configured repair. When automated repair is enabled, relevant repository context may be sent to the configured OpenAI API model with <code>store: false</code> to produce a structured repair plan. Repair changes are stored by GitHub as ordinary branches, commits, and pull requests. The application does not sell user data.</p><p><a href="${REPO_URL}/blob/main/docs/PRIVACY.md">Complete Privacy Policy</a></p>`, "text/html; charset=utf-8");
+    return send(res, 200, `<!doctype html><meta charset="utf-8"><title>Privacy - Agent Guardrail Monitor</title><h1>Privacy</h1><p>Agent Guardrail Monitor processes guardrail configuration, before/after regression evidence, MCP decision inputs, and bounded repository context needed for configured repair. Automated repair uses deterministic baseline restoration first. Only when deterministic repair cannot establish a bounded plan and an optional OpenAI API fallback is configured may relevant repository context be sent to that model with <code>store: false</code>. Repair changes are stored by GitHub as ordinary branches, commits, and pull requests. The application does not sell user data.</p><p><a href="${REPO_URL}/blob/main/docs/PRIVACY.md">Complete Privacy Policy</a></p>`, "text/html; charset=utf-8");
   }
 
   if (req.method === "GET" && url.pathname === "/support") {

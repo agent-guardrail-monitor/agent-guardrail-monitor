@@ -35,7 +35,9 @@ The context collector is intentionally narrow. It prioritizes supported guardrai
 
 ## Patch generation
 
-The hosted repair model produces a structured repair plan containing:
+AGM first attempts deterministic baseline restoration. If the regression identifies a supported guardrail file and the immediately previous commit contains the approved state, AGM can construct the repair plan directly without an external model.
+
+When deterministic restoration is unavailable, an optional hosted repair model may produce a structured repair plan containing:
 
 - evidence-backed root cause;
 - complete replacement contents for each changed file;
@@ -52,7 +54,7 @@ The plan is rejected if it:
 - attempts path traversal or Git internals;
 - attempts to change GitHub Actions workflow files.
 
-The default hosted model is configurable with `AGM_REPAIR_MODEL`. The current default is `gpt-5.6-sol`. The OpenAI Responses API request uses `store: false`.
+The optional hosted fallback model is configurable with `AGM_REPAIR_MODEL`. The current fallback default is `gpt-5.6-sol`. OpenAI Responses API fallback requests use `store: false`.
 
 ## GitHub mutation model
 

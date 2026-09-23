@@ -14,11 +14,11 @@ The hosted application does not maintain repository file contents as a customer 
 
 ## Automated repair model processing
 
-When a repairable regression is detected and repair is enabled, Agent Guardrail Monitor sends a bounded subset of relevant repository context to the configured OpenAI API model so it can produce a structured repair plan.
+When a repairable regression is detected and repair is enabled, Agent Guardrail Monitor first attempts deterministic baseline restoration using the immediately previous approved guardrail state. This path does not require sending repository context to an external model.
 
-The repair request includes relevant failure evidence plus selected before/after repository files needed to diagnose the regression. It does not intentionally send the entire repository.
+If deterministic restoration is unavailable and an optional OpenAI API fallback is configured, the fallback receives relevant failure evidence plus selected before/after repository files needed to diagnose the regression. It does not intentionally receive the entire repository.
 
-The OpenAI Responses API request is made with `store: false`. OpenAI infrastructure and account-level data controls remain governed by the OpenAI API terms and the data controls configured for the service account.
+Fallback OpenAI Responses API requests are made with `store: false`. OpenAI infrastructure and account-level data controls remain governed by the OpenAI API terms and the data controls configured for the service account.
 
 ## Repair behavior
 

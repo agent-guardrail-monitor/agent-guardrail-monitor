@@ -6,7 +6,11 @@ function evidence(item) {
   const runtime = item?.runtime || "unknown";
   const code = item?.code || "REGRESSION";
   const message = item?.message || "";
-  return message ? `[${runtime}] ${code}: ${message}` : `[${runtime}] ${code}`;
+  const filePath = item?.filePath || item?.path || null;
+  const prefix = filePath
+    ? `[${runtime}] ${code} path=${filePath}`
+    : `[${runtime}] ${code}`;
+  return message ? `${prefix}: ${message}` : prefix;
 }
 
 export function compareRepositoryScans(before = {}, current = {}) {
@@ -20,6 +24,7 @@ export function compareRepositoryScans(before = {}, current = {}) {
       regressions.push({
         code: "CONFIG_REMOVED",
         runtime: previous.runtime || "unknown",
+        filePath: previous.filePath || null,
         message: `${previous.filePath || "guardrail configuration"} was removed.`
       });
       continue;
@@ -32,6 +37,7 @@ export function compareRepositoryScans(before = {}, current = {}) {
         regressions.push({
           code: "HOOK_EVENT_REMOVED",
           runtime: previous.runtime || "unknown",
+          filePath: previous.filePath || null,
           message: `${event} disappeared from ${previous.filePath || "guardrail configuration"}.`
         });
       }
@@ -48,6 +54,7 @@ export function compareRepositoryScans(before = {}, current = {}) {
       regressions.push({
         code: item?.code || "NEW_FAIL_FINDING",
         runtime: item?.runtime || "unknown",
+        filePath: item?.filePath || null,
         message: item?.message || "A new FAIL finding appeared."
       });
     }
