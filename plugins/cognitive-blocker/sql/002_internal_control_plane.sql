@@ -36,7 +36,7 @@ BEGIN
       ADD CONSTRAINT cognitive_guard_events_task_account_fk
       FOREIGN KEY (task_contract_id, account_id)
       REFERENCES cognitive_task_contracts(id, account_id)
-      ON DELETE SET NULL;
+      ON DELETE RESTRICT;
   END IF;
 END $;
 
