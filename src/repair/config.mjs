@@ -10,7 +10,6 @@ export function normalizeRepairConfig(value = {}) {
     mode,
     autoMerge: mode === "auto_merge",
     waitForChecks: repair?.waitForChecks !== false,
-    allowWorkflowChanges: repair?.allowWorkflowChanges === true,
     checkTimeoutMs: Number.isFinite(repair?.checkTimeoutMs)
       ? Math.max(10_000, Math.min(Number(repair.checkTimeoutMs), 600_000))
       : 180_000
