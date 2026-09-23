@@ -101,7 +101,6 @@ export async function executeRepairCycle({
     repositoryContext
   });
   const validation = validateRepairPlan(proposed, {
-    allowWorkflowChanges: options.allowWorkflowChanges === true,
     allowedPaths: allowedRepairPaths
   });
   if (!validation.valid) {
