@@ -299,7 +299,7 @@ function markdown(scan) {
     "| --- | --- | --- |"
   ];
   if (!scan.results.length) {
-    lines.push("| Ã¢â‚¬â€ | Ã¢â‚¬â€ | No supported guardrail configuration found |");
+    lines.push("| n/a | n/a | No supported guardrail configuration found |");
   } else {
     for (const item of scan.results) {
       lines.push(`| ${item.runtime} | \`${item.filePath}\` | ${item.events.length ? item.events.join(", ") : "none detected"} |`);
