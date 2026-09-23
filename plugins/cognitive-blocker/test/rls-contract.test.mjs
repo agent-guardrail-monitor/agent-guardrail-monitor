@@ -4,7 +4,8 @@ import assert from "node:assert/strict";
 
 const sql = [
   fs.readFileSync(new URL("../sql/002_internal_control_plane.sql", import.meta.url), "utf8"),
-  fs.readFileSync(new URL("../sql/003_recovery_sessions.sql", import.meta.url), "utf8")
+  fs.readFileSync(new URL("../sql/003_recovery_sessions.sql", import.meta.url), "utf8"),
+  fs.readFileSync(new URL("../sql/004_account_wide_conversations.sql", import.meta.url), "utf8")
 ].join("\n");
 
 const tenantTables = [
@@ -16,7 +17,9 @@ const tenantTables = [
   "cognitive_guard_events",
   "cognitive_feature_flags",
   "cognitive_error_reports",
-  "cognitive_recovery_sessions"
+  "cognitive_recovery_sessions",
+  "cognitive_conversations",
+  "cognitive_turns"
 ];
 
 test("RLS migration defines database tenant context", () => {
@@ -57,4 +60,18 @@ test("recovery sessions enforce the fixed three-attempt policy", () => {
   assert.match(sql, /attempt integer NOT NULL DEFAULT 1 CHECK \(attempt >= 1 AND attempt <= 3\)/);
   assert.match(sql, /max_attempts integer NOT NULL DEFAULT 3 CHECK \(max_attempts = 3\)/);
   assert.match(sql, /phase text NOT NULL CHECK \(phase IN \('CORRECT','ALLOW','SAFE_STOP'\)\)/);
+});
+
+
+test("account installation is fixed to ALWAYS_ON with automatic chat registration", () => {
+  assert.match(sql, /activation_mode text NOT NULL DEFAULT 'ALWAYS_ON'/);
+  assert.match(sql, /CHECK \(activation_mode IN \('ALWAYS_ON'\)\)/);
+  assert.match(sql, /auto_register_conversations boolean NOT NULL DEFAULT true/);
+});
+
+test("chat history is account-scoped and conversation-scoped", () => {
+  assert.match(sql, /UNIQUE \(account_id, platform_conversation_ref\)/);
+  assert.match(sql, /FOREIGN KEY \(conversation_id, account_id\)/);
+  assert.match(sql, /REFERENCES cognitive_conversations\(id, account_id\)/);
+  assert.match(sql, /accepted_source text NOT NULL CHECK \(accepted_source IN \('USER_EXPLICIT','ALLOW'\)\)/);
 });
