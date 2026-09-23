@@ -18,6 +18,7 @@ import { createCognitiveBlockerMcpNodeHandler } from "./mcp.mjs";
 import { resolveFeatures, isFeatureEnabled } from "./feature-catalog.mjs";
 import { buildInternalErrorReport } from "./internal-errors.mjs";
 import { assertPermission, PERMISSIONS, permissionMatrix } from "./rbac.mjs";
+import { RECOVERY_MAX_ATTEMPTS } from "./recovery.mjs";
 
 const PORT = Number(process.env.PORT || 10000);
 const HOST = "0.0.0.0";
@@ -100,9 +101,10 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, {
         ok: true,
         product: "Cognitive Blocker Plugin",
-        version: "0.2.0",
+        version: "0.3.0",
         rulesetVersion: RULESET_VERSION,
         canonicalRuleCount: RULE_CATALOG.length,
+        recoveryMaxAttempts: RECOVERY_MAX_ATTEMPTS,
         databaseConfigured: databaseConfigured()
       });
     }
@@ -140,11 +142,12 @@ const server = http.createServer(async (req, res) => {
       const overrides = await listFeatureFlags(instance.account_id);
       return send(res, 200, {
         product: "Cognitive Blocker Plugin",
-        version: "0.2.0",
+        version: "0.3.0",
         role: instance.role,
         accountScoped: true,
         rulesetVersion: RULESET_VERSION,
         canonicalRuleCount: RULE_CATALOG.length,
+        recoveryMaxAttempts: RECOVERY_MAX_ATTEMPTS,
         features: resolveFeatures(overrides)
       });
     }
@@ -238,6 +241,31 @@ const server = http.createServer(async (req, res) => {
       return send(res, 400, { error: error.code.toLowerCase(), requestId });
     }
 
+    if (error.code === "RECOVERY_SESSION_NOT_FOUND") {
+      return send(res, 404, {
+        error: "recovery_session_not_found",
+        recoverySessionId: error.recoverySessionId,
+        requestId
+      });
+    }
+
+    if (error.code === "RECOVERY_SESSION_CLOSED") {
+      return send(res, 409, {
+        error: "recovery_session_closed",
+        recoverySessionId: error.recoverySessionId,
+        phase: error.phase,
+        requestId
+      });
+    }
+
+    if (error.code === "RECOVERY_PROJECT_MISMATCH") {
+      return send(res, 409, {
+        error: "recovery_project_mismatch",
+        recoverySessionId: error.recoverySessionId,
+        requestId
+      });
+    }
+
     console.error(JSON.stringify({
       event: "request_error",
       requestId,
@@ -252,7 +280,7 @@ server.listen(PORT, HOST, () => {
     event: "cognitive_blocker_started",
     host: HOST,
     port: PORT,
-    version: "0.2.0",
+    version: "0.3.0",
     rulesetVersion: RULESET_VERSION
   }));
 });
