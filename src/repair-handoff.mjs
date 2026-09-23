@@ -34,7 +34,7 @@ function proofEvidence(item) {
   return `[${runtime}] RUNTIME_PROOF_FAIL: ${reason}`;
 }
 
-export function buildRepairHandoff({
+export function buildRepairRequest({
   regressions = [],
   findings = [],
   proofs = [],
@@ -53,15 +53,16 @@ export function buildRepairHandoff({
 
   return {
     schemaVersion: REPAIR_HANDOFF_SCHEMA_VERSION,
-    kind: "AGM_TO_SRE_REPAIR_HANDOFF",
+    kind: "AGM_INTERNAL_REPAIR_REQUEST",
     producer: {
       name: "Agent Guardrail Monitor",
       version: PRODUCT_VERSION
     },
 
     consumer: {
-      name: "Software Repair Engineer",
-      interface: "sre_preflight"
+      name: "Agent Guardrail Monitor Repair Engine",
+      interface: "agm_repair_preflight",
+      integrated: true
     },
     status: repairRequired ? "REPAIR_REQUIRED" : "NO_REPAIR_REQUIRED",
     createdAt: new Date().toISOString(),
@@ -105,9 +106,12 @@ export function buildRepairHandoff({
   };
 }
 
-export function saveRepairHandoff(handoff, file) {
+export function saveRepairRequest(handoff, file) {
   const target = path.resolve(file);
   fs.mkdirSync(path.dirname(target), { recursive: true });
   fs.writeFileSync(target, JSON.stringify(handoff, null, 2) + "\n", "utf8");
   return target;
 }
+
+export const buildRepairHandoff = buildRepairRequest;
+export const saveRepairHandoff = saveRepairRequest;
