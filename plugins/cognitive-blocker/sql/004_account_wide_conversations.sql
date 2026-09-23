@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS cognitive_turns (
   account_id uuid NOT NULL REFERENCES cognitive_accounts(id) ON DELETE CASCADE,
   conversation_id uuid NOT NULL,
   turn_key text NOT NULL,
+  position bigint GENERATED ALWAYS AS IDENTITY,
   role text NOT NULL CHECK (role IN ('user','assistant')),
   content text NOT NULL,
   accepted_source text NOT NULL CHECK (accepted_source IN ('USER_EXPLICIT','ALLOW')),
@@ -44,8 +45,8 @@ CREATE TABLE IF NOT EXISTS cognitive_turns (
 CREATE INDEX IF NOT EXISTS idx_cognitive_conversations_account_seen
   ON cognitive_conversations(account_id, last_seen_at DESC);
 
-CREATE INDEX IF NOT EXISTS idx_cognitive_turns_conversation_created
-  ON cognitive_turns(account_id, conversation_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_cognitive_turns_conversation_position
+  ON cognitive_turns(account_id, conversation_id, position DESC);
 
 CREATE INDEX IF NOT EXISTS idx_cognitive_turns_search
   ON cognitive_turns
