@@ -159,7 +159,7 @@ function beginMarketplaceOAuth(res, url) {
       secret: OAUTH_STATE_SECRET
     });
   } catch (error) {
-    return send(res, 400, error.message);
+    return send(res, 400, "Não foi possível iniciar a conexão com o GitHub.");
   }
 
   const authorize = new URL("https://github.com/login/oauth/authorize");
