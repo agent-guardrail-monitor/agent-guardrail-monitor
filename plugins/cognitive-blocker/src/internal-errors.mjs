@@ -1,3 +1,5 @@
+import crypto from "node:crypto";
+
 const SECRET_KEYS = /token|secret|password|authorization|cookie|api[_-]?key|private[_-]?key/i;
 
 function sanitize(value, depth = 0) {
@@ -17,14 +19,16 @@ function sanitize(value, depth = 0) {
 
 export function buildInternalErrorReport(input = {}) {
   const error = input.error instanceof Error ? input.error : null;
+  const stackFingerprint = error?.stack
+    ? crypto.createHash("sha256").update(error.stack).digest("hex")
+    : null;
+
   return {
     source: String(input.source || "internal").slice(0, 120),
     errorCode: String(input.errorCode || error?.code || "UNCLASSIFIED").slice(0, 120),
     message: String(input.message || error?.message || "Internal error").slice(0, 2000),
     context: sanitize(input.context || {}),
-    stackFingerprint: error?.stack
-      ? Buffer.from(error.stack).toString("base64url").slice(0, 512)
-      : null,
+    stackFingerprint,
     requestFingerprint: input.requestFingerprint ? String(input.requestFingerprint).slice(0, 256) : null,
     projectId: input.projectId || null
   };
