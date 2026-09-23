@@ -32,11 +32,14 @@ maybeTest("Testcontainers: real PostgreSQL enforces cross-tenant RLS", { timeout
   const projectA = crypto.randomUUID();
   const projectB = crypto.randomUUID();
   const recoveryA = crypto.randomUUID();
+  const conversationA = crypto.randomUUID();
+  const conversationB = crypto.randomUUID();
 
   try {
     await adminPool.query(readMigration("001_init.sql"));
     await adminPool.query(readMigration("002_internal_control_plane.sql"));
     await adminPool.query(readMigration("003_recovery_sessions.sql"));
+    await adminPool.query(readMigration("004_account_wide_conversations.sql"));
 
     await adminPool.query(`CREATE ROLE ${appRole} LOGIN PASSWORD '${appPassword}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS`);
     await adminPool.query(`GRANT USAGE ON SCHEMA public TO ${appRole}`);
@@ -130,6 +133,43 @@ maybeTest("Testcontainers: real PostgreSQL enforces cross-tenant RLS", { timeout
         );
         await clientA.query("ROLLBACK TO SAVEPOINT recovery_cross_tenant");
 
+        await clientA.query(
+          `INSERT INTO cognitive_conversations
+             (id, account_id, platform_conversation_ref, title)
+           VALUES ($1,$2,'chat-a','A')`,
+          [conversationA, accountA]
+        );
+        await clientA.query(
+          `INSERT INTO cognitive_turns
+             (account_id, conversation_id, turn_key, role, content, accepted_source)
+           VALUES ($1,$2,'user-1','user','mensagem A','USER_EXPLICIT')`,
+          [accountA, conversationA]
+        );
+
+        const chatsA = await clientA.query(
+          "SELECT id, account_id, platform_conversation_ref FROM cognitive_conversations"
+        );
+        assert.equal(chatsA.rows.length, 1);
+        assert.equal(chatsA.rows[0].id, conversationA);
+
+        const turnsA = await clientA.query(
+          "SELECT role, content, accepted_source FROM cognitive_turns"
+        );
+        assert.equal(turnsA.rows.length, 1);
+        assert.equal(turnsA.rows[0].accepted_source, "USER_EXPLICIT");
+
+        await clientA.query("SAVEPOINT chat_cross_tenant");
+        await assert.rejects(
+          clientA.query(
+            `INSERT INTO cognitive_conversations
+               (id, account_id, platform_conversation_ref, title)
+             VALUES ($1,$2,'chat-b-illegal','B')`,
+            [crypto.randomUUID(), accountB]
+          ),
+          /row-level security|policy/i
+        );
+        await clientA.query("ROLLBACK TO SAVEPOINT chat_cross_tenant");
+
         await clientA.query("ROLLBACK");
       } finally {
         clientA.release();
@@ -153,6 +193,24 @@ maybeTest("Testcontainers: real PostgreSQL enforces cross-tenant RLS", { timeout
           "SELECT id, account_id FROM cognitive_recovery_sessions"
         );
         assert.equal(recoveryVisibleToB.rows.length, 0);
+
+        await clientB.query(
+          `INSERT INTO cognitive_conversations
+             (id, account_id, platform_conversation_ref, title)
+           VALUES ($1,$2,'chat-b','B')`,
+          [conversationB, accountB]
+        );
+
+        const chatsB = await clientB.query(
+          "SELECT id, account_id, platform_conversation_ref FROM cognitive_conversations"
+        );
+        assert.equal(chatsB.rows.length, 1);
+        assert.equal(chatsB.rows[0].id, conversationB);
+
+        const turnsB = await clientB.query(
+          "SELECT id FROM cognitive_turns"
+        );
+        assert.equal(turnsB.rows.length, 0);
 
         await clientB.query("ROLLBACK");
       } finally {
