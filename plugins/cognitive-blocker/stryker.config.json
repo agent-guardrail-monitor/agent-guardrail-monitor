@@ -4,7 +4,8 @@
     "src/engine.mjs",
     "src/rbac.mjs",
     "src/feature-catalog.mjs",
-    "src/internal-errors.mjs"
+    "src/internal-errors.mjs",
+    "src/recovery.mjs"
   ],
   "testRunner": "tap",
   "tap": {
@@ -12,7 +13,8 @@
       "test/engine.test.mjs",
       "test/engine-contract.test.mjs",
       "test/control-plane.test.mjs",
-      "test/control-plane-contract.test.mjs"
+      "test/control-plane-contract.test.mjs",
+      "test/recovery.test.mjs"
     ],
     "forceBail": true
   },
