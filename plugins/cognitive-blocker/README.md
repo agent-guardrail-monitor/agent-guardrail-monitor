@@ -2,7 +2,7 @@
 
 Internal account-scoped cognitive control layer for ChatGPT, Claude, Gemini and compatible AI runtimes.
 
-Current package version: **0.2.0**  
+Current package version: **0.3.0**  
 Canonical ruleset: **2026-09-23.1**
 
 ## Product contract
@@ -18,6 +18,7 @@ See:
 - `docs/ACCESS-CONTROL.md` — account isolation, RBAC and RLS.
 - `docs/FEATURE-CATALOG.md` — internal modules and feature flags.
 - `docs/PREMIUM-QUALITY.md` — fast-check, disposable PostgreSQL, mutation testing and runtime dependency gates.
+- `src/recovery.mjs` — controlled correction state machine after a canonical BLOCK.
 
 ## Internal dependency order
 
@@ -158,6 +159,47 @@ Semantic signals are considered only when:
 
 Unknown or weak signals do not become new rules.
 
+## Controlled recovery after BLOCK
+
+A canonical `BLOCK` no longer ends the controlled flow by itself.
+
+The internal recovery sequence is:
+
+```
+CHECK
+  -> BLOCK
+  -> CORRECT only the listed violations
+  -> RECHECK with the same recoverySessionId
+  -> ALLOW -> execution may proceed
+```
+
+A recovery session allows **three distinct candidates**. An identical replay does not consume a new attempt.
+
+On the third distinct blocked candidate:
+
+```
+BLOCK -> SAFE_STOP
+```
+
+`SAFE_STOP` means:
+
+- automatic retries stop;
+- `canExecute` remains false;
+- completion must not be claimed;
+- unresolved canonical violations are returned explicitly.
+
+The correction plan is surgical:
+
+- resources implicated by a violation are identified;
+- non-violating resources/actions are marked for preservation;
+- verified evidence is preserved when only one item is invalid;
+- frozen elements remain unchanged;
+- correction instructions are derived only from existing canonical rule IDs.
+
+Recovery state is persisted internally in `cognitive_recovery_sessions` and is protected by the same account-level PostgreSQL RLS as the rest of the tenant data.
+
+The recovery layer does **not** add blocking rules. The 59-rule catalog remains the only blocking authority.
+
 ## Cognitive memory
 
 Memory preserves epistemic state:
@@ -197,7 +239,7 @@ Authenticated endpoints use:
 Core endpoints:
 
 - `GET /v1/status`
-- `POST /v1/check`
+- `POST /v1/check` — returns ALLOW/BLOCK plus the controlled recovery state; corrected retries send the returned `recoverySessionId`
 - `PUT /v1/memory`
 - `GET /v1/memory`
 - `GET /v1/features`
@@ -241,6 +283,7 @@ Apply in order:
 
 1. `sql/001_init.sql`
 2. `sql/002_internal_control_plane.sql`
+3. `sql/003_recovery_sessions.sql`
 
 The second migration adds:
 
@@ -249,6 +292,8 @@ The second migration adds:
 - internal error reports;
 - tenant-safe composite references;
 - forced RLS policies.
+
+The third migration adds tenant-isolated controlled recovery sessions with a fixed three-attempt policy.
 
 These migrations are prepared but the real Neon database E2E remains pending until the approved Neon connection is available.
 
