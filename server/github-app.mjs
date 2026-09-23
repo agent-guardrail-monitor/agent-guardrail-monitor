@@ -4,6 +4,7 @@ import fs from "node:fs";
 import { agmMcpNodeHandler } from "./chatgpt-mcp.mjs";
 import { PRODUCT_VERSION } from "../src/core.mjs";
 import { summarizeMarketplacePurchase } from "../src/marketplace.mjs";
+import { createOAuthTransaction, verifyOAuthTransaction } from "../src/github-oauth.mjs";
 
 const PORT = Number(process.env.PORT || 3000);
 const APP_ID = String(process.env.GITHUB_APP_ID || "").trim();
@@ -12,6 +13,12 @@ const PRIVATE_KEY_PATH = String(process.env.GITHUB_PRIVATE_KEY_PATH || "/etc/sec
 const WEBHOOK_SECRET_PATH = String(process.env.GITHUB_WEBHOOK_SECRET_PATH || "/etc/secrets/webhook-secret.txt");
 const REPO_URL = "https://github.com/agent-guardrail-monitor/agent-guardrail-monitor";
 const DEPLOY_SHA = String(process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || "").trim() || null;
+const OAUTH_CLIENT_ID = String(process.env.GITHUB_CLIENT_ID || "Iv23lilPmMCpZGickCZN").trim();
+const OAUTH_CLIENT_SECRET = String(process.env.GITHUB_CLIENT_SECRET || "").trim();
+const OAUTH_CALLBACK_URL = String(
+  process.env.GITHUB_OAUTH_CALLBACK_URL || "https://agent-guardrail-monitor.onrender.com/oauth/callback"
+).trim();
+const OAUTH_COOKIE_NAME = "agm_oauth";
 
 function readSecretFile(filePath) {
   try {
@@ -25,9 +32,14 @@ const PRIVATE_KEY = readSecretFile(PRIVATE_KEY_PATH) ||
   (PRIVATE_KEY_B64 ? Buffer.from(PRIVATE_KEY_B64, "base64").toString("utf8").trim() : "");
 const WEBHOOK_SECRET = String(process.env.GITHUB_WEBHOOK_SECRET || "").trim() ||
   readSecretFile(WEBHOOK_SECRET_PATH);
+const OAUTH_STATE_SECRET = String(process.env.GITHUB_OAUTH_STATE_SECRET || "").trim() || WEBHOOK_SECRET;
 
 function configured() {
   return Boolean(APP_ID && PRIVATE_KEY && WEBHOOK_SECRET);
+}
+
+function oauthConfigured() {
+  return Boolean(OAUTH_CLIENT_ID && OAUTH_CLIENT_SECRET && OAUTH_CALLBACK_URL && OAUTH_STATE_SECRET);
 }
 
 function base64url(input) {
@@ -64,6 +76,121 @@ async function api(pathname, { token, method = "GET", body } = {}) {
     throw new Error(`GitHub API ${response.status}: ${text.slice(0, 500)}`);
   }
   return data;
+}
+
+function parseCookies(header) {
+  const result = {};
+  for (const part of String(header || "").split(";")) {
+    const index = part.indexOf("=");
+    if (index < 0) continue;
+    const name = part.slice(0, index).trim();
+    if (!name) continue;
+    result[name] = decodeURIComponent(part.slice(index + 1).trim());
+  }
+  return result;
+}
+
+function oauthCookie(value, maxAge = 600) {
+  return `${OAUTH_COOKIE_NAME}=${encodeURIComponent(value)}; Path=/oauth/callback; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=Lax`;
+}
+
+function redirect(res, location, cookie) {
+  const headers = { location, "cache-control": "no-store" };
+  if (cookie) headers["set-cookie"] = cookie;
+  res.writeHead(302, headers);
+  res.end();
+}
+
+async function exchangeOAuthCode(code, verifier) {
+  const body = new URLSearchParams({
+    client_id: OAUTH_CLIENT_ID,
+    client_secret: OAUTH_CLIENT_SECRET,
+    code,
+    redirect_uri: OAUTH_CALLBACK_URL,
+    code_verifier: verifier
+  });
+  const response = await fetch("https://github.com/login/oauth/access_token", {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/x-www-form-urlencoded",
+      "user-agent": "agent-guardrail-monitor"
+    },
+    body
+  });
+  const data = await response.json();
+  if (!response.ok || data.error || !data.access_token) {
+    throw new Error(`GitHub OAuth exchange failed: ${data.error || response.status}`);
+  }
+  return data.access_token;
+}
+
+async function verifyUserInstallation(token, installationId) {
+  const user = await api("/user", { token });
+  const installation = await api(
+    `/user/installations/${encodeURIComponent(installationId)}/repositories?per_page=1`,
+    { token }
+  );
+  if (!user?.id || !installation) throw new Error("Authorized user cannot verify this installation");
+  return { userId: user.id };
+}
+
+function beginMarketplaceOAuth(res, url) {
+  const installationId = url.searchParams.get("installation_id");
+  if (!installationId) {
+    return send(res, 200, `<!doctype html><meta charset="utf-8"><title>Setup - Agent Guardrail Monitor</title><h1>Agent Guardrail Monitor setup</h1><p>Install or manage Agent Guardrail Monitor from GitHub. Marketplace installations return here with a verified installation identifier and continue through GitHub authorization.</p><p><a href="https://github.com/apps/agent-guardrail-monitor">Open the GitHub App</a> &middot; <a href="${REPO_URL}">Documentation</a> &middot; <a href="/support">Support</a></p>`, "text/html; charset=utf-8");
+  }
+  if (!oauthConfigured()) return send(res, 503, "GitHub OAuth is not configured");
+
+  let tx;
+  try {
+    tx = createOAuthTransaction({
+      installationId,
+      marketplacePlanId: url.searchParams.get("marketplace_listing_plan_id"),
+      secret: OAUTH_STATE_SECRET
+    });
+  } catch (error) {
+    return send(res, 400, error.message);
+  }
+
+  const authorize = new URL("https://github.com/login/oauth/authorize");
+  authorize.searchParams.set("client_id", OAUTH_CLIENT_ID);
+  authorize.searchParams.set("redirect_uri", OAUTH_CALLBACK_URL);
+  authorize.searchParams.set("state", tx.state);
+  authorize.searchParams.set("code_challenge", tx.challenge);
+  authorize.searchParams.set("code_challenge_method", "S256");
+  redirect(res, authorize.toString(), oauthCookie(tx.transaction));
+}
+
+async function completeMarketplaceOAuth(req, res, url) {
+  const error = url.searchParams.get("error");
+  if (error) {
+    res.setHeader("set-cookie", oauthCookie("", 0));
+    return send(res, 400, `GitHub authorization was not completed: ${error}`);
+  }
+
+  const code = String(url.searchParams.get("code") || "");
+  const state = String(url.searchParams.get("state") || "");
+  const transaction = parseCookies(req.headers.cookie)[OAUTH_COOKIE_NAME];
+  if (!code || !state || !transaction) throw new Error("OAuth callback is missing required state");
+
+  const payload = verifyOAuthTransaction({
+    transaction,
+    state,
+    secret: OAUTH_STATE_SECRET
+  });
+  const token = await exchangeOAuthCode(code, payload.verifier);
+  const identity = await verifyUserInstallation(token, payload.installationId);
+
+  console.log(JSON.stringify({
+    event: "oauth_authorized",
+    userId: identity.userId,
+    installationId: Number(payload.installationId),
+    marketplacePlanId: payload.marketplacePlanId == null ? null : Number(payload.marketplacePlanId)
+  }));
+
+  res.setHeader("set-cookie", oauthCookie("", 0));
+  return send(res, 200, `<!doctype html><meta charset="utf-8"><title>Authorized - Agent Guardrail Monitor</title><h1>Agent Guardrail Monitor is connected</h1><p>GitHub authorization and installation ownership were verified. No user access token is retained by this flow.</p><p><a href="${REPO_URL}">Documentation</a> &middot; <a href="/support">Support</a></p>`, "text/html; charset=utf-8");
 }
 
 async function installationToken(installationId) {
@@ -275,7 +402,16 @@ const server = http.createServer((req, res) => {
   }
 
   if (req.method === "GET" && url.pathname === "/setup") {
-    return send(res, 200, `<!doctype html><meta charset="utf-8"><title>Setup - Agent Guardrail Monitor</title><h1>Agent Guardrail Monitor setup</h1><p>Your GitHub App installation can now be completed or managed from GitHub. Agent Guardrail Monitor will publish verification checks for repositories where the App is installed and the required permissions are available.</p><p><a href="https://github.com/apps/agent-guardrail-monitor">Open the GitHub App</a> &middot; <a href="${REPO_URL}">Documentation</a> &middot; <a href="/support">Support</a></p>`, "text/html; charset=utf-8");
+    return beginMarketplaceOAuth(res, url);
+  }
+
+  if (req.method === "GET" && url.pathname === "/oauth/callback") {
+    completeMarketplaceOAuth(req, res, url).catch((error) => {
+      console.error(JSON.stringify({ event: "oauth_error", message: error.message }));
+      if (!res.headersSent) res.setHeader("set-cookie", oauthCookie("", 0));
+      if (!res.writableEnded) send(res, 400, "GitHub authorization could not be verified");
+    });
+    return;
   }
 
   if (req.method === "GET" && url.pathname === "/privacy") {
