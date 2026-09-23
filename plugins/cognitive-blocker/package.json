@@ -11,7 +11,6 @@
     "check": "node --check src/server.mjs && node --check src/engine.mjs && node --check src/mcp.mjs && node --check src/db.mjs && node --check src/service.mjs && node --check src/rbac.mjs && node --check src/feature-catalog.mjs && node --check src/internal-errors.mjs",
     "test:property": "node --test test/property-based.test.mjs",
     "test:containers": "RUN_TESTCONTAINERS=1 node --test test/testcontainers-rls.test.mjs",
-    "test:mutation:unit": "node --test test/engine.test.mjs test/engine-contract.test.mjs test/control-plane.test.mjs",
     "test:mutation": "stryker run"
   },
   "engines": {
@@ -26,6 +25,7 @@
   "devDependencies": {
     "@stryker-mutator/core": "10.0.0",
     "@testcontainers/postgresql": "12.1.0",
-    "fast-check": "4.10.2"
+    "fast-check": "4.10.2",
+    "@stryker-mutator/tap-runner": "10.0.0"
   }
 }
