@@ -33,6 +33,15 @@ function annotations() {
     idempotentHint: true
   };
 }
+
+function actionAnnotations() {
+  return {
+    readOnlyHint: false,
+    destructiveHint: false,
+    openWorldHint: true,
+    idempotentHint: false
+  };
+}
 function buildToolRegistry(requiredTools, availableTools, forbiddenTools) {
   const ids = new Set([
     ...(requiredTools || []),
@@ -94,18 +103,115 @@ const repairCheckSchema = z.object({
   exitCode: z.number().int().optional(),
   evidence: z.string().max(4000).optional()
 });
-export function buildAgmMcpServer() {
+export function buildAgmMcpServer(context = {}) {
   const server = new McpServer(
     { name: "agent-guardrail-monitor", version: VERSION },
     {
       instructions:
-        "When this app is enabled for a conversation, use agm_preflight before a material action or answer. " +
-        "If the verdict is BLOCK, REQUIRE_REVIEW, or UNKNOWN, do not represent the action as approved or completed. " +
-        "When AGM-observed regression evidence requires repair, use agm_prepare_repair and keep diagnosis, patching, regression testing, and validation inside the integrated AGM repair loop. " +
-        "Use agm_repair_preflight before a repair completion claim and agm_validate_repair immediately before claiming VERIFIED FIX. " +
-        "AGM must retest the original control after repair. Before releasing material factual or execution claims, use agm_validate_output. " +
-        "Only release when the relevant deterministic gate returns release=true. This app does not override platform policy and cannot " +
-        "intercept turns in which the host does not invoke the app."
+        "O nome público deste app é O Guardião - W. Quando houver uma instalação conectada, chame guardiao_pendencias no início do uso e comunique ao usuário qualquer auditoria nova dentro da própria conversa. " +
+        "Use linguagem simples em português: APROVADO, FALHA e DESCONHECIDO. O fluxo público é acha → prova → conserta → testa → fecha. " +
+        "Nunca envie e-mail, SMS, WhatsApp ou qualquer comunicação externa. " +
+        "When a material action needs policy evaluation, use agm_preflight. When repair evidence is required, keep diagnosis, patching, testing, and validation inside the integrated AGM repair loop. " +
+        "Before claiming VERIFIED FIX, use agm_validate_repair. Before releasing material execution claims, use agm_validate_output."
+    }
+  );
+
+  const auditApi = context?.auditApi || null;
+  const installationId = Number(context?.installationId || 0) || null;
+  const platform = String(context?.platform || "").trim().toLowerCase() || null;
+
+  function connectedAudit() {
+    return Boolean(auditApi && installationId);
+  }
+
+  server.registerTool(
+    "guardiao_pendencias",
+    {
+      title: "Ver novidades do O Guardião",
+      description: "Mostra as auditorias e consertos recentes que o usuário precisa saber dentro desta conversa.",
+      inputSchema: z.object({
+        repositorio: z.string().max(300).optional()
+      }),
+      annotations: annotations()
+    },
+    async (input) => {
+      if (!connectedAudit()) {
+        return response({
+          connected: false,
+          mensagem: "O Guardião ainda precisa ser conectado a uma instalação."
+        });
+      }
+      return response(await auditApi.pending({
+        installationId,
+        platform,
+        repository: input.repositorio || null
+      }));
+    }
+  );
+
+  server.registerTool(
+    "guardiao_ultima_auditoria",
+    {
+      title: "Ver última auditoria",
+      description: "Mostra a última auditoria do O Guardião e o que foi encontrado ou consertado.",
+      inputSchema: z.object({
+        repositorio: z.string().max(300).optional()
+      }),
+      annotations: annotations()
+    },
+    async (input) => {
+      if (!connectedAudit()) {
+        return response({ connected: false, mensagem: "O Guardião ainda precisa ser conectado." });
+      }
+      return response(await auditApi.latest({
+        installationId,
+        repository: input.repositorio || null
+      }));
+    }
+  );
+
+  server.registerTool(
+    "guardiao_historico",
+    {
+      title: "Ver histórico de auditorias",
+      description: "Mostra auditorias recentes do O Guardião em linguagem simples.",
+      inputSchema: z.object({
+        repositorio: z.string().max(300).optional(),
+        limite: z.number().int().min(1).max(30).default(7)
+      }),
+      annotations: annotations()
+    },
+    async (input) => {
+      if (!connectedAudit()) {
+        return response({ connected: false, mensagem: "O Guardião ainda precisa ser conectado." });
+      }
+      return response(await auditApi.history({
+        installationId,
+        repository: input.repositorio || null,
+        limit: input.limite
+      }));
+    }
+  );
+
+  server.registerTool(
+    "guardiao_verificar_agora",
+    {
+      title: "Verificar agora",
+      description: "Executa uma nova auditoria agora. Pode encontrar falhas e preparar consertos autorizados.",
+      inputSchema: z.object({
+        repositorio: z.string().max(300).optional()
+      }),
+      annotations: actionAnnotations()
+    },
+    async (input) => {
+      if (!connectedAudit()) {
+        return response({ connected: false, mensagem: "O Guardião ainda precisa ser conectado." });
+      }
+      return response(await auditApi.runNow({
+        installationId,
+        repository: input.repositorio || null,
+        platform
+      }));
     }
   );
 
@@ -359,12 +465,16 @@ export function buildAgmMcpServer() {
   return server;
 }
 
-const handler = createMcpHandler(buildAgmMcpServer, { legacy: "stateless" });
-export const agmMcpNodeHandler = toNodeHandler(handler, {
-  onerror: (error) => {
-    console.error(JSON.stringify({
-      event: "mcp_adapter_error",
-      message: error.message
-    }));
-  }
-});
+export function createAgmMcpNodeHandler(context = {}) {
+  const handler = createMcpHandler(() => buildAgmMcpServer(context), { legacy: "stateless" });
+  return toNodeHandler(handler, {
+    onerror: (error) => {
+      console.error(JSON.stringify({
+        event: "mcp_adapter_error",
+        message: error.message
+      }));
+    }
+  });
+}
+
+export const agmMcpNodeHandler = createAgmMcpNodeHandler();
