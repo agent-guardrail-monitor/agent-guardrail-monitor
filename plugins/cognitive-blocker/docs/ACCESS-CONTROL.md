@@ -52,3 +52,19 @@ A recovery session stores only control state needed for the correction loop:
 - invalid resource identifiers.
 
 The fixed maximum is three distinct attempts. Recovery state is internal and cannot be shared across accounts.
+
+
+## Account-wide chat isolation
+
+The installed account operates in `ALWAYS_ON` mode, but each platform chat keeps a separate episodic history.
+
+RLS-protected tables:
+
+- `cognitive_conversations`
+- `cognitive_turns`
+
+The composite foreign key `(conversation_id, account_id)` prevents a turn from being attached to a conversation owned by another account.
+
+Assistant candidate content is accepted into `cognitive_turns` only with `accepted_source='ALLOW'`. Explicit user turns use `USER_EXPLICIT`.
+
+Raw chat history is never automatically shared between chats. Cross-chat continuity comes from validated account memory, not from copying another chat's transcript.
