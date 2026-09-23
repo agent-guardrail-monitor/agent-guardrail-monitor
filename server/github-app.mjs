@@ -1,7 +1,7 @@
 import http from "node:http";
 import crypto from "node:crypto";
 import fs from "node:fs";
-import { agmMcpNodeHandler } from "./chatgpt-mcp.mjs";
+import { createAgmMcpNodeHandler } from "./chatgpt-mcp.mjs";
 import { PRODUCT_VERSION } from "../src/core.mjs";
 import { summarizeMarketplacePurchase } from "../src/marketplace.mjs";
 import { createOAuthTransaction, verifyOAuthTransaction } from "../src/github-oauth.mjs";
@@ -19,6 +19,11 @@ const PRIVATE_KEY_PATH = String(process.env.GITHUB_PRIVATE_KEY_PATH || "/etc/sec
 const WEBHOOK_SECRET_PATH = String(process.env.GITHUB_WEBHOOK_SECRET_PATH || "/etc/secrets/webhook-secret.txt");
 const REPO_URL = "https://github.com/agent-guardrail-monitor/agent-guardrail-monitor";
 const PUBLIC_NAME = "O Guardião - W";
+const PUBLIC_BASE_URL = String(
+  process.env.GUARDIAN_PUBLIC_URL || "https://agent-guardrail-monitor.onrender.com"
+).replace(/\/$/, "");
+const DAILY_RUN_KEY = String(process.env.GUARDIAN_DAILY_KEY || "").trim();
+const AUDIT_CHECK_NAME = `${PUBLIC_NAME} · Auditoria`;
 const DEPLOY_SHA = String(process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || "").trim() || null;
 const OAUTH_CLIENT_ID = String(process.env.GITHUB_CLIENT_ID || "Iv23lilPmMCpZGickCZN").trim();
 const OAUTH_CLIENT_SECRET = String(process.env.GITHUB_CLIENT_SECRET || "").trim();
@@ -42,6 +47,54 @@ const PRIVATE_KEY = readSecretFile(PRIVATE_KEY_PATH) ||
 const WEBHOOK_SECRET = String(process.env.GITHUB_WEBHOOK_SECRET || "").trim() ||
   readSecretFile(WEBHOOK_SECRET_PATH);
 const OAUTH_STATE_SECRET = String(process.env.GITHUB_OAUTH_STATE_SECRET || "").trim() || WEBHOOK_SECRET;
+
+function connectorSignature(installationId, platform) {
+  const id = Number(installationId);
+  const target = String(platform || "").trim().toLowerCase();
+  if (!Number.isSafeInteger(id) || id <= 0) throw new Error("instalação inválida");
+  if (!["chatgpt", "claude"].includes(target)) throw new Error("plataforma inválida");
+  if (!WEBHOOK_SECRET) throw new Error("assinatura de conexão indisponível");
+  return crypto.createHmac("sha256", WEBHOOK_SECRET)
+    .update(`${id}:${target}`)
+    .digest("base64url");
+}
+
+function connectorUrl(installationId, platform) {
+  const url = new URL("/mcp", PUBLIC_BASE_URL);
+  url.searchParams.set("installation_id", String(installationId));
+  url.searchParams.set("platform", platform);
+  url.searchParams.set("token", connectorSignature(installationId, platform));
+  return url.toString();
+}
+
+function connectorContext(url) {
+  const installationId = Number(url.searchParams.get("installation_id") || 0);
+  const platform = String(url.searchParams.get("platform") || "").trim().toLowerCase();
+  const supplied = String(url.searchParams.get("token") || "");
+  if (!installationId && !platform && !supplied) return null;
+  if (!installationId || !platform || !supplied) return false;
+
+  let expected;
+  try {
+    expected = connectorSignature(installationId, platform);
+  } catch {
+    return false;
+  }
+  const a = Buffer.from(expected);
+  const b = Buffer.from(supplied);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return false;
+  return { installationId, platform };
+}
+
+function brazilDate(value = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(value);
+}
+
 
 function configured() {
   return Boolean(APP_ID && PRIVATE_KEY && WEBHOOK_SECRET);
@@ -144,31 +197,40 @@ async function verifyUserInstallation(token, installationId) {
   return { userId: user.id };
 }
 
-function beginMarketplaceOAuth(res, url) {
-  const installationId = url.searchParams.get("installation_id");
+async function beginInstallationSetup(res, url) {
+  const installationId = Number(url.searchParams.get("installation_id") || 0);
+
   if (!installationId) {
-    return send(res, 200, `<!doctype html><meta charset="utf-8"><title>Conectar - ${PUBLIC_NAME}</title><h1>${PUBLIC_NAME}</h1><p>Conecte o Guardião ao seu GitHub para acompanhar as travas de segurança dos robôs de IA.</p><p><a href="https://github.com/apps/agent-guardrail-monitor">Conectar ao GitHub</a> &middot; <a href="/support">Ajuda</a></p>`, "text/html; charset=utf-8");
+    return send(
+      res,
+      200,
+      `<!doctype html><meta charset="utf-8"><title>Conectar - ${PUBLIC_NAME}</title><h1>${PUBLIC_NAME}</h1><p>Conecte O Guardião ao seu GitHub para iniciar a primeira auditoria.</p><p><a href="https://github.com/apps/agent-guardrail-monitor">Conectar ao GitHub</a></p>`,
+      "text/html; charset=utf-8"
+    );
   }
-  if (!oauthConfigured()) return send(res, 503, "A conexão com o GitHub ainda não está pronta.");
-
-  let tx;
   try {
-    tx = createOAuthTransaction({
+    const reports = await runInstallationAudit({ installationId, kind: "initial" });
+    console.log(JSON.stringify({
+      event: "initial_audit_completed",
       installationId,
-      marketplacePlanId: url.searchParams.get("marketplace_listing_plan_id"),
-      secret: OAUTH_STATE_SECRET
-    });
+      repositories: reports.length
+    }));
+    const chatgptAddress = connectorUrl(installationId, "chatgpt").replaceAll("&", "&amp;");
+    const claudeAddress = connectorUrl(installationId, "claude").replaceAll("&", "&amp;");
+    return send(
+      res,
+      200,
+      `<!doctype html><meta charset="utf-8"><title>Conectado - ${PUBLIC_NAME}</title><h1>${PUBLIC_NAME} está conectado</h1><p>A auditoria inicial foi executada. O resultado será apresentado dentro da sua IA.</p><h2>Instalar no ChatGPT</h2><p>Copie este endereço e use ao adicionar O Guardião como app/conector:</p><input id="chatgpt" value="${chatgptAddress}" readonly size="90"><button onclick="navigator.clipboard.writeText(document.getElementById('chatgpt').value)">Copiar</button><h2>Instalar no Claude</h2><p>Copie este endereço e use ao adicionar O Guardião como conector:</p><input id="claude" value="${claudeAddress}" readonly size="90"><button onclick="navigator.clipboard.writeText(document.getElementById('claude').value)">Copiar</button><p>Depois de conectar, pergunte: <strong>O que O Guardião encontrou?</strong></p>`,
+      "text/html; charset=utf-8"
+    );
   } catch (error) {
-    return send(res, 400, "Não foi possível iniciar a conexão com o GitHub.");
+    console.error(JSON.stringify({
+      event: "initial_audit_error",
+      installationId,
+      message: error.message
+    }));
+    return send(res, 500, "A conexão foi feita, mas a auditoria inicial ainda não pôde ser concluída.");
   }
-
-  const authorize = new URL("https://github.com/login/oauth/authorize");
-  authorize.searchParams.set("client_id", OAUTH_CLIENT_ID);
-  authorize.searchParams.set("redirect_uri", OAUTH_CALLBACK_URL);
-  authorize.searchParams.set("state", tx.state);
-  authorize.searchParams.set("code_challenge", tx.challenge);
-  authorize.searchParams.set("code_challenge_method", "S256");
-  redirect(res, authorize.toString(), oauthCookie(tx.transaction));
 }
 
 async function completeMarketplaceOAuth(req, res, url) {
@@ -379,6 +441,445 @@ async function attemptAutomatedRepair({
   return result;
 }
 
+function auditKindLabel(kind) {
+  if (kind === "initial") return "inicial";
+  if (kind === "manual") return "agora";
+  return "diária";
+}
+
+function encodeAuditMeta(meta) {
+  return "guardiao:" + Buffer.from(JSON.stringify(meta), "utf8").toString("base64url");
+}
+
+function decodeAuditMeta(value) {
+  const text = String(value || "");
+  if (!text.startsWith("guardiao:")) return null;
+  try {
+    return JSON.parse(Buffer.from(text.slice(9), "base64url").toString("utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function repairPublicStatus(result) {
+  const status = String(result?.status || "");
+  if (!result || status === "NO_REPAIR_REQUIRED") {
+    return "Nenhum conserto foi necessário.";
+  }
+  if (status === "AUTO_REPAIR_VERIFIED") {
+    return "O conserto foi aplicado e testado.";
+  }
+  if (status === "VERIFIED_REPAIR_PR_OPENED") {
+    return "O conserto foi preparado e testado. Está separado para revisão.";
+  }
+  if (status === "REPAIR_PR_OPENED_NEEDS_REVIEW") {
+    return "O conserto foi preparado, mas ainda precisa de revisão.";
+  }
+  if (status === "AUTO_REPAIR_DISABLED") {
+    return "O conserto automático está desligado para este repositório.";
+  }
+  return "A falha foi registrada e o conserto precisa de revisão.";
+}
+
+async function listAppInstallations() {
+  const installations = [];
+  for (let page = 1; page <= 20; page += 1) {
+    const batch = await api(`/app/installations?per_page=100&page=${page}`, {
+      token: appJwt()
+    });
+    if (!Array.isArray(batch) || !batch.length) break;
+    installations.push(...batch);
+    if (batch.length < 100) break;
+  }
+  return installations;
+}
+
+async function listInstallationRepositories(installationId, token = null) {
+  const installationTokenValue = token || await installationToken(installationId);
+  const repositories = [];
+  for (let page = 1; page <= 50; page += 1) {
+    const data = await api(`/installation/repositories?per_page=100&page=${page}`, {
+      token: installationTokenValue
+    });
+    const batch = Array.isArray(data?.repositories) ? data.repositories : [];
+    repositories.push(...batch);
+    if (batch.length < 100) break;
+  }
+  return { token: installationTokenValue, repositories };
+}
+
+async function repositoryHead(owner, repo, token, defaultBranch) {
+  const branch = String(defaultBranch || "main");
+  const ref = await api(
+    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/ref/heads/${branch.split("/").map(encodeURIComponent).join("/")}`,
+    { token }
+  );
+  return ref?.object?.sha || null;
+}
+
+async function commitParent(owner, repo, token, sha) {
+  const commit = await api(
+    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/commits/${encodeURIComponent(sha)}`,
+    { token }
+  );
+  return commit?.parents?.[0]?.sha || null;
+}
+
+async function publishAuditRecord({
+  token,
+  owner,
+  repo,
+  sha,
+  kind,
+  scan,
+  repairResult
+}) {
+  const createdAt = new Date().toISOString();
+  const meta = {
+    v: 1,
+    k: kind,
+    d: brazilDate(new Date(createdAt)),
+    t: createdAt,
+    s: scan.state,
+    f: scan.fails.length,
+    u: scan.unknowns.length,
+    r: repairResult?.status || null,
+    p: repairResult?.pullRequest?.number || null
+  };
+  const conclusion = scan.state === "FAIL"
+    ? "failure"
+    : scan.state === "PASS"
+      ? "success"
+      : "neutral";
+  const summary = [
+    markdown(scan),
+    "",
+    "### Conserto",
+    repairPublicStatus(repairResult),
+    "",
+    `Auditoria ${auditKindLabel(kind)} concluída em ${meta.d}.`
+  ].join("\n").slice(0, 65000);
+
+  const run = await api(
+    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/check-runs`,
+    {
+      token,
+      method: "POST",
+      body: {
+        name: AUDIT_CHECK_NAME,
+        head_sha: sha,
+        status: "completed",
+        conclusion,
+        external_id: encodeAuditMeta(meta),
+        details_url: REPO_URL,
+        output: {
+          title: `Auditoria ${auditKindLabel(kind)}: ${publicState(scan.state)}`,
+          summary
+        }
+      }
+    }
+  );
+
+  return {
+    id: run?.id || null,
+    repository: `${owner}/${repo}`,
+    kind,
+    date: meta.d,
+    createdAt,
+    status: publicState(scan.state),
+    fails: meta.f,
+    unknowns: meta.u,
+    repair: repairPublicStatus(repairResult),
+    repairStatus: meta.r,
+    pullRequest: meta.p
+  };
+}
+
+async function runRepositoryAudit({
+  installationId,
+  repository,
+  token,
+  kind = "daily"
+}) {
+  const owner = repository.owner?.login;
+  const repo = repository.name;
+  const defaultBranch = repository.default_branch || "main";
+  if (!owner || !repo) throw new Error("repositório inválido");
+
+  const sha = await repositoryHead(owner, repo, token, defaultBranch);
+  if (!sha) throw new Error("não foi possível localizar a versão atual do repositório");
+
+  const scan = await scanRepository(owner, repo, token, sha);
+  let repairResult = null;
+
+  if (scan.state === "FAIL") {
+    const beforeSha = await commitParent(owner, repo, token, sha);
+    if (beforeSha) {
+      try {
+        repairResult = await attemptAutomatedRepair({
+          owner,
+          repo,
+          installationId,
+          beforeSha,
+          afterSha: sha,
+          defaultBranch,
+          currentScan: scan
+        });
+      } catch (error) {
+        repairResult = {
+          status: "REPAIR_BLOCKED",
+          reason: String(error.message || error)
+        };
+      }
+    }
+  }
+
+  return publishAuditRecord({
+    token,
+    owner,
+    repo,
+    sha,
+    kind,
+    scan,
+    repairResult
+  });
+}
+
+async function runInstallationAudit({
+  installationId,
+  kind = "daily",
+  repository = null
+}) {
+  const listed = await listInstallationRepositories(installationId);
+  let repositories = listed.repositories;
+  const requested = String(repository || "").trim();
+  if (requested) {
+    repositories = repositories.filter((item) =>
+      item.full_name === requested || item.name === requested
+    );
+  }
+
+  const reports = [];
+  for (const item of repositories) {
+    try {
+      reports.push(await runRepositoryAudit({
+        installationId,
+        repository: item,
+        token: listed.token,
+        kind
+      }));
+    } catch (error) {
+      reports.push({
+        repository: item.full_name || item.name,
+        kind,
+        status: "DESCONHECIDO",
+        error: String(error.message || error)
+      });
+    }
+  }
+  return reports;
+}
+
+async function recentCommitShas(owner, repo, token, defaultBranch) {
+  const shas = new Set();
+  const head = await repositoryHead(owner, repo, token, defaultBranch);
+  if (head) shas.add(head);
+
+  const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+  const commits = await api(
+    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/commits?sha=${encodeURIComponent(defaultBranch)}&since=${encodeURIComponent(since)}&per_page=50`,
+    { token }
+  );
+  for (const commit of Array.isArray(commits) ? commits : []) {
+    if (commit?.sha) shas.add(commit.sha);
+  }
+  return [...shas];
+}
+
+function auditRecordFromCheck(repository, run) {
+  const meta = decodeAuditMeta(run?.external_id);
+  if (!meta) return null;
+  return {
+    repository,
+    kind: meta.k,
+    date: meta.d,
+    createdAt: meta.t || run?.completed_at || run?.started_at || null,
+    status: publicState(meta.s),
+    fails: Number(meta.f || 0),
+    unknowns: Number(meta.u || 0),
+    repairStatus: meta.r || null,
+    pullRequest: meta.p || null,
+    summary: run?.output?.summary || null
+  };
+}
+
+async function listAuditsForRepository({
+  token,
+  repository,
+  limit = 20
+}) {
+  const owner = repository.owner?.login;
+  const repo = repository.name;
+  const defaultBranch = repository.default_branch || "main";
+  const records = [];
+  const shas = await recentCommitShas(owner, repo, token, defaultBranch);
+
+  for (const sha of shas) {
+    const data = await api(
+      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/commits/${encodeURIComponent(sha)}/check-runs?filter=all&per_page=100`,
+      { token }
+    );
+    for (const run of data?.check_runs || []) {
+      if (run?.name !== AUDIT_CHECK_NAME) continue;
+      const record = auditRecordFromCheck(repository.full_name, run);
+      if (record) records.push(record);
+    }
+  }
+
+  records.sort((a, b) =>
+    String(b.createdAt || "").localeCompare(String(a.createdAt || ""))
+  );
+  return records.slice(0, limit);
+}
+
+async function selectedRepositories(installationId, repository = null) {
+  const listed = await listInstallationRepositories(installationId);
+  const requested = String(repository || "").trim();
+  const repositories = requested
+    ? listed.repositories.filter((item) =>
+        item.full_name === requested || item.name === requested
+      )
+    : listed.repositories;
+  return { token: listed.token, repositories };
+}
+
+async function ensureDailyAudit(installationId, repository = null) {
+  const selected = await selectedRepositories(installationId, repository);
+  const today = brazilDate();
+  const executed = [];
+
+  for (const item of selected.repositories) {
+    const recent = await listAuditsForRepository({
+      token: selected.token,
+      repository: item,
+      limit: 20
+    });
+    const exists = recent.some((record) =>
+      record.kind === "daily" && record.date === today
+    );
+    if (!exists) {
+      executed.push(await runRepositoryAudit({
+        installationId,
+        repository: item,
+        token: selected.token,
+        kind: "daily"
+      }));
+    }
+  }
+  return { selected, executed };
+}
+
+async function auditHistory({
+  installationId,
+  repository = null,
+  limit = 7,
+  ensureToday = false
+}) {
+  if (ensureToday) await ensureDailyAudit(installationId, repository);
+  const selected = await selectedRepositories(installationId, repository);
+  const records = [];
+  for (const item of selected.repositories) {
+    records.push(...await listAuditsForRepository({
+      token: selected.token,
+      repository: item,
+      limit
+    }));
+  }
+  records.sort((a, b) =>
+    String(b.createdAt || "").localeCompare(String(a.createdAt || ""))
+  );
+  return {
+    connected: true,
+    repositories: selected.repositories.map((item) => item.full_name),
+    audits: records.slice(0, limit)
+  };
+}
+
+const auditApi = {
+  async pending({ installationId, platform, repository }) {
+    const history = await auditHistory({
+      installationId,
+      repository,
+      limit: 5,
+      ensureToday: true
+    });
+    return {
+      ...history,
+      platform,
+      mensagem: history.audits.length
+        ? "Estas são as auditorias mais recentes do O Guardião."
+        : "Ainda não há auditorias registradas."
+    };
+  },
+
+  async latest({ installationId, repository }) {
+    const history = await auditHistory({
+      installationId,
+      repository,
+      limit: 1,
+      ensureToday: true
+    });
+    return {
+      connected: true,
+      repositories: history.repositories,
+      audit: history.audits[0] || null
+    };
+  },
+
+  async history({ installationId, repository, limit }) {
+    return auditHistory({
+      installationId,
+      repository,
+      limit,
+      ensureToday: false
+    });
+  },
+
+  async runNow({ installationId, repository }) {
+    const reports = await runInstallationAudit({
+      installationId,
+      repository,
+      kind: "manual"
+    });
+    return {
+      connected: true,
+      mensagem: "Verificação concluída.",
+      audits: reports
+    };
+  }
+};
+
+async function runAllDailyAudits() {
+  const installations = await listAppInstallations();
+  const results = [];
+  for (const installation of installations) {
+    try {
+      const before = await ensureDailyAudit(installation.id);
+      results.push({
+        installationId: installation.id,
+        repositories: before.selected.repositories.length,
+        executed: before.executed.length
+      });
+    } catch (error) {
+      results.push({
+        installationId: installation.id,
+        error: String(error.message || error)
+      });
+    }
+  }
+  return results;
+}
+
 function publicState(state) {
   if (state === "PASS") return "APROVADO";
   if (state === "FAIL") return "FALHA";
@@ -542,7 +1043,15 @@ const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
 
   if (url.pathname === "/mcp") {
-    agmMcpNodeHandler(req, res).catch((error) => {
+    const context = connectorContext(url);
+    if (context === false) {
+      return send(res, 401, "Conexão do O Guardião inválida.");
+    }
+    const handler = createAgmMcpNodeHandler({
+      ...(context || {}),
+      auditApi
+    });
+    handler(req, res).catch((error) => {
       console.error(JSON.stringify({ event: "mcp_error", message: error.message }));
       if (!res.headersSent) send(res, 500, "mcp error");
     });
@@ -554,7 +1063,11 @@ const server = http.createServer((req, res) => {
   }
 
   if (req.method === "GET" && url.pathname === "/setup") {
-    return beginMarketplaceOAuth(res, url);
+    beginInstallationSetup(res, url).catch((error) => {
+      console.error(JSON.stringify({ event: "setup_error", message: error.message }));
+      if (!res.writableEnded) send(res, 500, "Não foi possível concluir a instalação.");
+    });
+    return;
   }
 
   if (req.method === "GET" && url.pathname === "/oauth/callback") {
@@ -619,6 +1132,29 @@ const server = http.createServer((req, res) => {
   });
 });
 
+let lastSchedulerDate = null;
+
+async function schedulerTick() {
+  const now = new Date();
+  const date = brazilDate(now);
+  const hour = Number(new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Sao_Paulo",
+    hour: "2-digit",
+    hour12: false
+  }).format(now));
+  if (hour < 5 || lastSchedulerDate === date) return;
+  lastSchedulerDate = date;
+  try {
+    const results = await runAllDailyAudits();
+    console.log(JSON.stringify({ event: "daily_scheduler_completed", date, results }));
+  } catch (error) {
+    lastSchedulerDate = null;
+    console.error(JSON.stringify({ event: "daily_scheduler_error", date, message: error.message }));
+  }
+}
+
 server.listen(PORT, "0.0.0.0", () => {
   console.log(JSON.stringify({ event: "server_started", port: PORT, configured: configured() }));
+  setTimeout(() => schedulerTick(), 5000).unref();
+  setInterval(() => schedulerTick(), 60 * 1000).unref();
 });

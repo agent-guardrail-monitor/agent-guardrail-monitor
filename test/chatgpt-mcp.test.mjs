@@ -1,11 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
-import { agmMcpNodeHandler } from "../server/chatgpt-mcp.mjs";
+import { createAgmMcpNodeHandler } from "../server/chatgpt-mcp.mjs";
 
-async function withMcpServer(run) {
+async function withMcpServer(run, context = {}) {
+  const handler = createAgmMcpNodeHandler(context);
   const server = http.createServer((req, res) => {
-    agmMcpNodeHandler(req, res).catch((error) => {
+    handler(req, res).catch((error) => {
       if (!res.headersSent) {
         res.writeHead(500, { "content-type": "text/plain" });
         res.end(error.message);
@@ -52,12 +53,20 @@ test("ChatGPT MCP lists AGM decision tools", async () => {
       "agm_repair_preflight",
       "agm_status",
       "agm_validate_output",
-      "agm_validate_repair"
+      "agm_validate_repair",
+      "guardiao_historico",
+      "guardiao_pendencias",
+      "guardiao_ultima_auditoria",
+      "guardiao_verificar_agora"
     ]);
     for (const tool of message.result.tools) {
-      assert.equal(tool.annotations.readOnlyHint, true);
       assert.equal(tool.annotations.destructiveHint, false);
-      assert.equal(tool.annotations.openWorldHint, false);
+      if (tool.name === "guardiao_verificar_agora") {
+        assert.equal(tool.annotations.readOnlyHint, false);
+        assert.equal(tool.annotations.openWorldHint, true);
+      } else {
+        assert.equal(tool.annotations.readOnlyHint, true);
+      }
     }
   });
 });
@@ -154,5 +163,44 @@ test("ChatGPT MCP final gate rejects unknown factual claims", async () => {
       result.claims.violations.map((item) => item.code),
       ["UNKNOWN_PRESENTED_AS_FACT"]
     );
+  });
+});
+
+test("O Guardião mostra auditorias dentro da IA conectada", async () => {
+  const calls = [];
+  const auditApi = {
+    async pending(input) {
+      calls.push(input);
+      return {
+        connected: true,
+        mensagem: "Estas são as auditorias mais recentes do O Guardião.",
+        audits: [{ repository: "acme/app", status: "APROVADO" }]
+      };
+    }
+  };
+
+  await withMcpServer(async (url) => {
+    const message = await mcpCall(url, 20, "tools/call", {
+      name: "guardiao_pendencias",
+      arguments: {}
+    });
+    assert.equal(message.result.structuredContent.connected, true);
+    assert.equal(message.result.structuredContent.audits[0].status, "APROVADO");
+    assert.equal(calls[0].installationId, 123);
+    assert.equal(calls[0].platform, "chatgpt");
+  }, {
+    installationId: 123,
+    platform: "chatgpt",
+    auditApi
+  });
+});
+
+test("O Guardião não expõe auditoria sem instalação conectada", async () => {
+  await withMcpServer(async (url) => {
+    const message = await mcpCall(url, 21, "tools/call", {
+      name: "guardiao_ultima_auditoria",
+      arguments: {}
+    });
+    assert.equal(message.result.structuredContent.connected, false);
   });
 });

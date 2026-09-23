@@ -32,6 +32,25 @@ Ainda falta prova para confirmar o funcionamento.
 
 O Guardião nunca transforma falta de prova em aprovação.
 
+## Auditoria automática
+
+Na primeira instalação, O Guardião faz uma auditoria imediatamente.
+
+Depois, ele verifica o ambiente todos os dias às **05:00, horário de Brasília**.
+
+Se o horário for perdido, O Guardião executa a auditoria na primeira oportunidade do mesmo dia.
+
+Dentro do ChatGPT ou Claude, o usuário pode pedir:
+
+- **Ver minha última auditoria**
+- **O que você consertou?**
+- **Mostra as falhas recentes**
+- **Verificar agora**
+
+Toda comunicação sobre auditorias, falhas e consertos acontece **dentro do ChatGPT ou do Claude**.
+
+O Guardião não usa e-mail, WhatsApp ou SMS para avisar o usuário.
+
 ## Como o conserto funciona
 
 O Guardião compara o estado atual com o último estado aprovado.
@@ -76,7 +95,7 @@ A tecnologia interna continua com o identificador `agent-guardrail-monitor` e o 
 
 Os detalhes técnicos, instalação local, testes e integrações ficam na pasta [docs](docs/).
 
-Versão atual: **0.3.0-alpha.2**
+Versão atual: **0.3.0-alpha.3**
 
 ---
 
