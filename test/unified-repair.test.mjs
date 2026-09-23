@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { repairPreflight, validateRepairEvidence } from "../src/repair/protocol.mjs";
 import { validateRepairPlan } from "../src/repair/plan.mjs";
 import { executeRepairCycle } from "../src/repair/executor.mjs";
+import { compareRepositoryScans } from "../src/repair/regression.mjs";
+import { parseRepairConfig } from "../src/repair/config.mjs";
 
 const validPlan = {
   summary: "Restore disabled hook configuration",
@@ -102,4 +104,36 @@ test("closed-loop executor merges and revalidates when auto-merge is explicitly 
   assert.equal(result.status, "AUTO_REPAIR_VERIFIED");
   assert.equal(result.finalState, "VERIFIED FIX");
   assert.equal(result.mergedSha, "merged555555");
+});
+
+
+test("repository scan comparison detects removed hook events as repairable regressions", () => {
+  const before = {
+    results: [{ runtime: "claude", filePath: ".claude/settings.json", events: ["PreToolUse"], fails: [] }],
+    fails: []
+  };
+  const current = {
+    results: [{ runtime: "claude", filePath: ".claude/settings.json", events: [], fails: [] }],
+    fails: []
+  };
+  const result = compareRepositoryScans(before, current);
+  assert.equal(result.verdict, "FAIL");
+  assert.equal(result.regressions[0].code, "HOOK_EVENT_REMOVED");
+  assert.match(result.failureEvidence[0], /PreToolUse/);
+});
+
+test("repository repair config defaults to automatic repair PR and requires explicit auto-merge", () => {
+  const defaults = parseRepairConfig("");
+  assert.equal(defaults.enabled, true);
+  assert.equal(defaults.mode, "pull_request");
+  assert.equal(defaults.autoMerge, false);
+
+  const auto = parseRepairConfig(JSON.stringify({ repair: { mode: "auto_merge" } }));
+  assert.equal(auto.enabled, true);
+  assert.equal(auto.autoMerge, true);
+});
+
+test("invalid repository repair config is surfaced instead of silently enabling custom behavior", () => {
+  const config = parseRepairConfig("{");
+  assert.equal(config.configError, "Invalid .agent-guardrail-monitor/config.json");
 });
