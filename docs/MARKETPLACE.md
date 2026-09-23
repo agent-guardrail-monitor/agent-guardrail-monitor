@@ -72,8 +72,7 @@ The default repository behavior is:
   "repair": {
     "enabled": true,
     "mode": "pull_request",
-    "waitForChecks": true,
-    "allowWorkflowChanges": false
+    "waitForChecks": true
   }
 }
 ```
@@ -92,7 +91,7 @@ See [Integrated Repair Engine — v0.3](REPAIR-ENGINE-v0.3.md).
 
 The initial Marketplace plan is free. The v0.3 alpha provides automated repair for guardrail regressions within the evidence and repository surfaces supported by Agent Guardrail Monitor.
 
-The repair engine is intentionally bounded. It does not claim arbitrary unrestricted code modification across unrelated repository areas, and workflow-file mutation is blocked unless explicitly allowed.
+The repair engine is intentionally bounded. It does not claim arbitrary unrestricted code modification across unrelated repository areas. Workflow-file mutation is blocked in v0.3 alpha.
 
 Paid plans require a separate billing and entitlement implementation before activation.
 
