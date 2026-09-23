@@ -2,7 +2,10 @@ import fs from "node:fs";
 import test from "node:test";
 import assert from "node:assert/strict";
 
-const sql = fs.readFileSync(new URL("../sql/002_internal_control_plane.sql", import.meta.url), "utf8");
+const sql = [
+  fs.readFileSync(new URL("../sql/002_internal_control_plane.sql", import.meta.url), "utf8"),
+  fs.readFileSync(new URL("../sql/003_recovery_sessions.sql", import.meta.url), "utf8")
+].join("\n");
 
 const tenantTables = [
   "cognitive_projects",
@@ -12,7 +15,8 @@ const tenantTables = [
   "cognitive_task_contracts",
   "cognitive_guard_events",
   "cognitive_feature_flags",
-  "cognitive_error_reports"
+  "cognitive_error_reports",
+  "cognitive_recovery_sessions"
 ];
 
 test("RLS migration defines database tenant context", () => {
@@ -46,4 +50,11 @@ test("PLpgSQL migration blocks use complete dollar-quote delimiters", () => {
   assert.equal((sql.match(/END \$\$;/g) || []).length, 3);
   assert.doesNotMatch(sql, /DO \$\n/);
   assert.doesNotMatch(sql, /END \$;/);
+});
+
+
+test("recovery sessions enforce the fixed three-attempt policy", () => {
+  assert.match(sql, /attempt integer NOT NULL DEFAULT 1 CHECK \(attempt >= 1 AND attempt <= 3\)/);
+  assert.match(sql, /max_attempts integer NOT NULL DEFAULT 3 CHECK \(max_attempts = 3\)/);
+  assert.match(sql, /phase text NOT NULL CHECK \(phase IN \('CORRECT','ALLOW','SAFE_STOP'\)\)/);
 });
