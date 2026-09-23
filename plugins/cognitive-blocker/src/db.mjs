@@ -1,6 +1,8 @@
 import crypto from "node:crypto";
 import pg from "pg";
 import { RULESET_VERSION } from "./rule-catalog.mjs";
+import { validateFeatureChange } from "./feature-catalog.mjs";
+import { normalizeRole } from "./rbac.mjs";
 
 const { Pool } = pg;
 const pool = process.env.DATABASE_URL
@@ -18,6 +20,28 @@ export function hashToken(token) {
 export async function query(text, params = []) {
   if (!pool) throw new Error("DATABASE_URL is not configured");
   return pool.query(text, params);
+}
+
+export async function withAccountContext(accountId, operation) {
+  if (!pool) throw new Error("DATABASE_URL is not configured");
+  if (!accountId) throw new Error("account_id_required");
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(
+      "SELECT set_config('app.current_account_id', $1, true)",
+      [String(accountId)]
+    );
+    const result = await operation(client);
+    await client.query("COMMIT");
+    return result;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function installAccount({ platform, externalAccountRef, label }) {
@@ -41,8 +65,8 @@ export async function installAccount({ platform, externalAccountRef, label }) {
        VALUES ($1,$2,$3)
        ON CONFLICT(account_id)
        DO UPDATE SET token_hash = EXCLUDED.token_hash, ruleset_version = EXCLUDED.ruleset_version,
-                     status = 'ACTIVE', updated_at = now()
-       RETURNING id, account_id, ruleset_version, status`,
+                     role = 'OWNER', status = 'ACTIVE', updated_at = now()
+       RETURNING id, account_id, role, ruleset_version, status`,
       [accountId, tokenHash, RULESET_VERSION]
     );
     await client.query("COMMIT");
@@ -58,65 +82,146 @@ export async function installAccount({ platform, externalAccountRef, label }) {
 export async function resolveInstanceToken(token) {
   if (!token || !pool) return null;
   const result = await pool.query(
-    `SELECT i.id AS instance_id, i.account_id, a.platform, a.external_account_ref
+    `SELECT i.id AS instance_id, i.account_id, i.role,
+            a.platform, a.external_account_ref
        FROM cognitive_instances i
        JOIN cognitive_accounts a ON a.id = i.account_id
        WHERE i.token_hash = $1 AND i.status = 'ACTIVE'`,
     [hashToken(token)]
   );
-  return result.rows[0] || null;
+  const row = result.rows[0];
+  return row ? { ...row, role: normalizeRole(row.role) } : null;
 }
 
 export async function upsertMemory(accountId, input) {
   const projectId = input.projectId || null;
   const scopeKey = projectId ? "project:" + projectId : "account";
-  const result = await query(
-    `INSERT INTO cognitive_memory_items
-       (account_id, project_id, scope_key, memory_key, memory_type, value, claim_state, status, source)
-     VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,'CURRENT',$8)
-     ON CONFLICT(account_id, scope_key, memory_key)
-     DO UPDATE SET
-       value = EXCLUDED.value,
-       memory_type = EXCLUDED.memory_type,
-       claim_state = EXCLUDED.claim_state,
-       source = EXCLUDED.source,
-       status = 'CURRENT',
-       version = cognitive_memory_items.version + 1,
-       updated_at = now()
-     RETURNING id, project_id, scope_key, memory_key, memory_type, value, claim_state, status, version, updated_at`,
-    [accountId, projectId, scopeKey, input.key, input.type, JSON.stringify(input.value),
-     input.claimState, input.source || null]
-  );
-  return result.rows[0];
+  return withAccountContext(accountId, async (client) => {
+    const result = await client.query(
+      `INSERT INTO cognitive_memory_items
+         (account_id, project_id, scope_key, memory_key, memory_type, value, claim_state, status, source)
+       VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,'CURRENT',$8)
+       ON CONFLICT(account_id, scope_key, memory_key)
+       DO UPDATE SET
+         value = EXCLUDED.value,
+         memory_type = EXCLUDED.memory_type,
+         claim_state = EXCLUDED.claim_state,
+         source = EXCLUDED.source,
+         status = 'CURRENT',
+         version = cognitive_memory_items.version + 1,
+         updated_at = now()
+       RETURNING id, project_id, scope_key, memory_key, memory_type, value,
+                 claim_state, status, version, updated_at`,
+      [accountId, projectId, scopeKey, input.key, input.type, JSON.stringify(input.value),
+       input.claimState, input.source || null]
+    );
+    return result.rows[0];
+  });
 }
 
 export async function listMemory(accountId, projectId = null) {
   const scopeKey = projectId ? "project:" + projectId : "account";
-  const result = await query(
-    `SELECT id, project_id, memory_key, memory_type, value, claim_state, status, version, updated_at
-       FROM cognitive_memory_items
-       WHERE account_id = $1 AND scope_key = $2 AND status = 'CURRENT'
-       ORDER BY updated_at DESC`,
-    [accountId, scopeKey]
-  );
-  return result.rows;
+  return withAccountContext(accountId, async (client) => {
+    const result = await client.query(
+      `SELECT id, project_id, memory_key, memory_type, value, claim_state,
+              status, version, updated_at
+         FROM cognitive_memory_items
+         WHERE account_id = $1 AND scope_key = $2 AND status = 'CURRENT'
+         ORDER BY updated_at DESC`,
+      [accountId, scopeKey]
+    );
+    return result.rows;
+  });
 }
 
 export async function appendGuardEvent(accountId, payload) {
-  await query(
-    `INSERT INTO cognitive_guard_events
-       (account_id, project_id, task_contract_id, decision, ruleset_version,
-        violations, ignored_signals, request_fingerprint)
-     VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8)`,
-    [
-      accountId,
-      payload.projectId || null,
-      payload.taskContractId || null,
-      payload.result.decision,
-      payload.result.rulesetVersion,
-      JSON.stringify(payload.result.violations),
-      JSON.stringify(payload.result.ignoredSignals),
-      payload.requestFingerprint || null
-    ]
-  );
+  return withAccountContext(accountId, async (client) => {
+    await client.query(
+      `INSERT INTO cognitive_guard_events
+         (account_id, project_id, task_contract_id, decision, ruleset_version,
+          violations, ignored_signals, request_fingerprint)
+       VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8)`,
+      [
+        accountId,
+        payload.projectId || null,
+        payload.taskContractId || null,
+        payload.result.decision,
+        payload.result.rulesetVersion,
+        JSON.stringify(payload.result.violations),
+        JSON.stringify(payload.result.ignoredSignals),
+        payload.requestFingerprint || null
+      ]
+    );
+  });
+}
+
+export async function listFeatureFlags(accountId) {
+  return withAccountContext(accountId, async (client) => {
+    const result = await client.query(
+      `SELECT feature_key, enabled, updated_by_role, updated_at
+         FROM cognitive_feature_flags
+         WHERE account_id = $1
+         ORDER BY feature_key`,
+      [accountId]
+    );
+    return result.rows;
+  });
+}
+
+export async function setFeatureFlag(accountId, role, key, enabled) {
+  const validated = validateFeatureChange(key, enabled);
+  return withAccountContext(accountId, async (client) => {
+    const result = await client.query(
+      `INSERT INTO cognitive_feature_flags
+         (account_id, feature_key, enabled, updated_by_role)
+       VALUES ($1,$2,$3,$4)
+       ON CONFLICT(account_id, feature_key)
+       DO UPDATE SET enabled = EXCLUDED.enabled,
+                     updated_by_role = EXCLUDED.updated_by_role,
+                     updated_at = now()
+       RETURNING feature_key, enabled, updated_by_role, updated_at`,
+      [accountId, validated.feature.key, validated.enabled, normalizeRole(role)]
+    );
+    return result.rows[0];
+  });
+}
+
+export async function recordError(accountId, report) {
+  return withAccountContext(accountId, async (client) => {
+    const result = await client.query(
+      `INSERT INTO cognitive_error_reports
+         (account_id, project_id, source, error_code, message, context,
+          stack_fingerprint, request_fingerprint)
+       VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8)
+       RETURNING id, project_id, source, error_code, message, context,
+                 status, created_at`,
+      [
+        accountId,
+        report.projectId || null,
+        report.source,
+        report.errorCode,
+        report.message,
+        JSON.stringify(report.context || {}),
+        report.stackFingerprint || null,
+        report.requestFingerprint || null
+      ]
+    );
+    return result.rows[0];
+  });
+}
+
+export async function listErrors(accountId, limit = 50) {
+  const safeLimit = Math.max(1, Math.min(100, Number(limit) || 50));
+  return withAccountContext(accountId, async (client) => {
+    const result = await client.query(
+      `SELECT id, project_id, source, error_code, message, context,
+              status, created_at, resolved_at
+         FROM cognitive_error_reports
+         WHERE account_id = $1
+         ORDER BY created_at DESC
+         LIMIT $2`,
+      [accountId, safeLimit]
+    );
+    return result.rows;
+  });
 }
