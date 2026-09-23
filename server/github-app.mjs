@@ -197,31 +197,39 @@ async function verifyUserInstallation(token, installationId) {
   return { userId: user.id };
 }
 
-function beginMarketplaceOAuth(res, url) {
-  const installationId = url.searchParams.get("installation_id");
+async function beginInstallationSetup(res, url) {
+  const installationId = Number(url.searchParams.get("installation_id") || 0);
+
   if (!installationId) {
-    return send(res, 200, `<!doctype html><meta charset="utf-8"><title>Conectar - ${PUBLIC_NAME}</title><h1>${PUBLIC_NAME}</h1><p>Conecte o Guardião ao seu GitHub para acompanhar as travas de segurança dos robôs de IA.</p><p><a href="https://github.com/apps/agent-guardrail-monitor">Conectar ao GitHub</a> &middot; <a href="/support">Ajuda</a></p>`, "text/html; charset=utf-8");
+    return send(
+      res,
+      200,
+      `<!doctype html><meta charset="utf-8"><title>Conectar - ${PUBLIC_NAME}</title><h1>${PUBLIC_NAME}</h1><p>Conecte O Guardião ao seu GitHub para iniciar a primeira auditoria.</p><p><a href="https://github.com/apps/agent-guardrail-monitor">Conectar ao GitHub</a></p>`,
+      "text/html; charset=utf-8"
+    );
   }
-  if (!oauthConfigured()) return send(res, 503, "A conexão com o GitHub ainda não está pronta.");
 
-  let tx;
   try {
-    tx = createOAuthTransaction({
+    const reports = await runInstallationAudit({ installationId, kind: "initial" });
+    console.log(JSON.stringify({
+      event: "initial_audit_completed",
       installationId,
-      marketplacePlanId: url.searchParams.get("marketplace_listing_plan_id"),
-      secret: OAUTH_STATE_SECRET
-    });
+      repositories: reports.length
+    }));
+    return send(
+      res,
+      200,
+      `<!doctype html><meta charset="utf-8"><title>Conectado - ${PUBLIC_NAME}</title><h1>${PUBLIC_NAME} está conectado</h1><p>A auditoria inicial foi executada. O resultado fica disponível para ser apresentado dentro do ChatGPT ou Claude.</p>`,
+      "text/html; charset=utf-8"
+    );
   } catch (error) {
-    return send(res, 400, "Não foi possível iniciar a conexão com o GitHub.");
+    console.error(JSON.stringify({
+      event: "initial_audit_error",
+      installationId,
+      message: error.message
+    }));
+    return send(res, 500, "A conexão foi feita, mas a auditoria inicial ainda não pôde ser concluída.");
   }
-
-  const authorize = new URL("https://github.com/login/oauth/authorize");
-  authorize.searchParams.set("client_id", OAUTH_CLIENT_ID);
-  authorize.searchParams.set("redirect_uri", OAUTH_CALLBACK_URL);
-  authorize.searchParams.set("state", tx.state);
-  authorize.searchParams.set("code_challenge", tx.challenge);
-  authorize.searchParams.set("code_challenge_method", "S256");
-  redirect(res, authorize.toString(), oauthCookie(tx.transaction));
 }
 
 async function completeMarketplaceOAuth(req, res, url) {
@@ -1046,7 +1054,11 @@ const server = http.createServer((req, res) => {
   }
 
   if (req.method === "GET" && url.pathname === "/setup") {
-    return beginMarketplaceOAuth(res, url);
+    beginInstallationSetup(res, url).catch((error) => {
+      console.error(JSON.stringify({ event: "setup_error", message: error.message }));
+      if (!res.writableEnded) send(res, 500, "Não foi possível concluir a instalação.");
+    });
+    return;
   }
 
   if (req.method === "GET" && url.pathname === "/oauth/callback") {
