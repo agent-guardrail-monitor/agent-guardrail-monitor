@@ -47,9 +47,12 @@ test("ChatGPT MCP lists AGM decision tools", async () => {
     const names = message.result.tools.map((tool) => tool.name);
     assert.deepEqual(names.sort(), [
       "agm_preflight",
+      "agm_prepare_repair",
       "agm_prepare_repair_handoff",
+      "agm_repair_preflight",
       "agm_status",
-      "agm_validate_output"
+      "agm_validate_output",
+      "agm_validate_repair"
     ]);
     for (const tool of message.result.tools) {
       assert.equal(tool.annotations.readOnlyHint, true);
@@ -90,10 +93,10 @@ test("ChatGPT MCP blocks destructive shell commands", async () => {
     assert.equal(message.result.structuredContent.code, "RULE_BLOCK");
   });
 });
-test("ChatGPT MCP prepares a Software Repair Engineer handoff", async () => {
+test("ChatGPT MCP prepares an integrated AGM repair request", async () => {
   await withMcpServer(async (url) => {
     const message = await mcpCall(url, 4, "tools/call", {
-      name: "agm_prepare_repair_handoff",
+      name: "agm_prepare_repair",
       arguments: {
         regressions: [{
           runtime: "claude",
@@ -104,10 +107,28 @@ test("ChatGPT MCP prepares a Software Repair Engineer handoff", async () => {
     });
     const result = message.result.structuredContent;
     assert.equal(result.status, "REPAIR_REQUIRED");
-    assert.equal(result.consumer.name, "Software Repair Engineer");
-    assert.equal(result.consumer.interface, "sre_preflight");
+    assert.equal(result.consumer.name, "Agent Guardrail Monitor Repair Engine");
+    assert.equal(result.consumer.interface, "agm_repair_preflight");
+    assert.equal(result.consumer.integrated, true);
     assert.equal(result.rootCauseState, "UNKNOWN");
     assert.match(result.repairRequest.failureEvidence[0], /HOOK_EVENT_REMOVED/);
+  });
+});
+
+
+test("ChatGPT MCP repair preflight requires root cause before patching", async () => {
+  await withMcpServer(async (url) => {
+    const message = await mcpCall(url, 5, "tools/call", {
+      name: "agm_repair_preflight",
+      arguments: {
+        objective: "Repair a detected guardrail regression.",
+        failureEvidence: ["[claude] HOOK_EVENT_REMOVED: PreToolUse disappeared."]
+      }
+    });
+    const result = message.result.structuredContent;
+    assert.equal(result.decision, "NEEDS_EVIDENCE");
+    assert.equal(result.stage, "ROOT_CAUSE_REQUIRED");
+    assert.deepEqual(result.missing, ["root_cause"]);
   });
 });
 
