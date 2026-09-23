@@ -25,8 +25,10 @@ flowchart TD
   FLAGS --> SERVICE[Cognitive Service]
   SERVICE --> MEMORY[Account + Project Memory]
   SERVICE --> ENGINE[Canonical 59-rule Blocking Engine]
+  ENGINE --> RECOVERY[Controlled Recovery Controller]
   MEMORY --> DB[(PostgreSQL)]
-  ENGINE --> EVENTS[Guard Events]
+  RECOVERY --> EVENTS[Guard Events]
+  RECOVERY --> DB
   EVENTS --> DB
   DB --> RLS[Row Level Security]
   API --> ERRORS[Internal Error Reporter]
@@ -128,4 +130,39 @@ classDiagram
   CognitiveAccount "1" --> "*" ErrorReport
   CognitiveProject "1" --> "*" CognitiveMemoryItem
   CognitiveProject "1" --> "*" ErrorReport
+```
+
+
+## Controlled recovery sequence
+
+```mermaid
+sequenceDiagram
+  participant H as AI Host
+  participant P as Plugin
+  participant E as 59-rule Engine
+  participant R as Recovery Controller
+  participant D as PostgreSQL/RLS
+
+  H->>P: candidate
+  P->>E: canonical check
+  E-->>P: BLOCK + violations
+  P->>R: build surgical correction plan
+  R->>D: create/update tenant recovery session
+  R-->>H: CORRECT + recoverySessionId + preserve/corrections
+  H->>H: regenerate only invalid portions
+  H->>P: corrected candidate + same recoverySessionId
+  P->>E: recheck
+  alt valid
+    E-->>P: ALLOW
+    P->>R: close session
+    R-->>H: ALLOW + canExecute=true
+  else blocked before limit
+    E-->>P: BLOCK
+    P->>R: advance distinct attempt
+    R-->>H: CORRECT
+  else third distinct BLOCK
+    E-->>P: BLOCK
+    P->>R: close as SAFE_STOP
+    R-->>H: SAFE_STOP + canExecute=false
+  end
 ```
