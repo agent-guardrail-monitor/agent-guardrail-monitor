@@ -49,7 +49,7 @@ export async function appendAcceptedTurn(accountId, conversationId, input) {
        VALUES ($1,$2,$3,$4,$5,$6)
        ON CONFLICT(account_id, conversation_id, turn_key)
        DO NOTHING
-       RETURNING id, conversation_id, turn_key, role, content,
+       RETURNING id, conversation_id, turn_key, position, role, content,
                  accepted_source, created_at`,
       [accountId, conversationId, turnKey, role, content, source]
     );
@@ -72,10 +72,10 @@ export async function loadConversationContext(accountId, conversationId, queryTe
 
   return withAccountContext(accountId, async (client) => {
     const recentResult = await client.query(
-      `SELECT id, turn_key, role, content, accepted_source, created_at
+      `SELECT id, turn_key, position, role, content, accepted_source, created_at
        FROM cognitive_turns
        WHERE account_id = $1 AND conversation_id = $2
-       ORDER BY created_at DESC, id DESC
+       ORDER BY position DESC
        LIMIT $3`,
       [accountId, conversationId, recentLimit]
     );
@@ -86,7 +86,7 @@ export async function loadConversationContext(accountId, conversationId, queryTe
     let relevant = [];
     if (query && relevantLimit > 0) {
       const relevantResult = await client.query(
-        `SELECT id, turn_key, role, content, accepted_source, created_at,
+        `SELECT id, turn_key, position, role, content, accepted_source, created_at,
                 ts_rank_cd(
                   to_tsvector('simple', content),
                   plainto_tsquery('simple', $3)
@@ -96,7 +96,7 @@ export async function loadConversationContext(accountId, conversationId, queryTe
            AND conversation_id = $2
            AND to_tsvector('simple', content) @@ plainto_tsquery('simple', $3)
            AND NOT (id = ANY($4::uuid[]))
-         ORDER BY rank DESC, created_at DESC
+         ORDER BY rank DESC, position DESC
          LIMIT $5`,
         [accountId, conversationId, query, recentIds, relevantLimit]
       );
