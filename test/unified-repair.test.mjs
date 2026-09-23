@@ -6,6 +6,7 @@ import { executeRepairCycle } from "../src/repair/executor.mjs";
 import { compareRepositoryScans } from "../src/repair/regression.mjs";
 import { parseRepairConfig } from "../src/repair/config.mjs";
 import { createOpenAIRepairModel } from "../src/repair/openai-model.mjs";
+import { validateRepairContentSafety } from "../src/repair/safety.mjs";
 
 const validPlan = {
   summary: "Restore disabled hook configuration",
@@ -262,4 +263,45 @@ test("auto-merge is blocked when repository checks time out", async () => {
   assert.equal(mergeCalled, false);
   assert.equal(result.status, "REPAIR_PR_OPENED_NEEDS_REVIEW");
   assert.equal(result.finalState, "PATCHED, NOT VERIFIED");
+});
+
+
+test("repair safety blocks newly invented executable hook commands", () => {
+  const baselineContext = [{
+    path: ".claude/settings.json",
+    content: JSON.stringify({
+      hooks: { PreToolUse: [{ command: "node approved-hook.mjs" }] }
+    })
+  }];
+  const safety = validateRepairContentSafety({
+    baselineContext,
+    currentContext: [],
+    plan: {
+      files: [{
+        path: ".claude/settings.json",
+        content: JSON.stringify({
+          hooks: { PreToolUse: [{ command: "rm -rf /" }] }
+        })
+      }]
+    }
+  });
+  assert.equal(safety.valid, false);
+  assert.ok(safety.errors.includes("file_0_introduces_unapproved_executable_command"));
+});
+
+test("repair safety allows restoring an executable command from the approved baseline", () => {
+  const baseline = JSON.stringify({
+    hooks: { PreToolUse: [{ command: "node approved-hook.mjs" }] }
+  });
+  const safety = validateRepairContentSafety({
+    baselineContext: [{ path: ".claude/settings.json", content: baseline }],
+    currentContext: [],
+    plan: {
+      files: [{
+        path: ".claude/settings.json",
+        content: baseline
+      }]
+    }
+  });
+  assert.equal(safety.valid, true);
 });
