@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { validateRepairPlan } from "./plan.mjs";
 import { repairPreflight, validateRepairEvidence } from "./protocol.mjs";
+import { validateRepairContentSafety } from "./safety.mjs";
 
 function text(value, max = 4000) {
   return String(value ?? "").trim().slice(0, max);
@@ -111,6 +112,18 @@ export async function executeRepairCycle({
     };
   }
   const plan = validation.normalized;
+  const contentSafety = validateRepairContentSafety({
+    plan,
+    baselineContext,
+    currentContext
+  });
+  if (!contentSafety.valid) {
+    return {
+      status: "PLAN_BLOCKED",
+      finalState: "ROOT CAUSE FOUND, PATCH BLOCKED",
+      reasons: contentSafety.errors
+    };
+  }
 
   const beforePatch = repairPreflight({
     failureEvidence: failures,
