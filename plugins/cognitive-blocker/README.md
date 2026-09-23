@@ -17,6 +17,7 @@ See:
 - `docs/SYSTEM-MAP.md` — system map and request sequence.
 - `docs/ACCESS-CONTROL.md` — account isolation, RBAC and RLS.
 - `docs/FEATURE-CATALOG.md` — internal modules and feature flags.
+- `docs/PREMIUM-QUALITY.md` — fast-check, disposable PostgreSQL, mutation testing and runtime dependency gates.
 
 ## Internal dependency order
 
@@ -250,6 +251,16 @@ The second migration adds:
 - forced RLS policies.
 
 These migrations are prepared but the real Neon database E2E remains pending until the approved Neon connection is available.
+
+## Premium quality gates
+
+Development-only quality layers are pinned under `devDependencies`:
+
+- `fast-check` — generative property/invariant testing;
+- `@testcontainers/postgresql` — disposable PostgreSQL 16 with real migrations and RLS;
+- `@stryker-mutator/core` + TAP runner — mutation testing against blocker/RBAC/feature/error logic.
+
+The deployment template installs runtime dependencies with `npm install --omit=dev`, so these tools stay outside the production process. See `docs/PREMIUM-QUALITY.md`.
 
 ## Automated tests
 
