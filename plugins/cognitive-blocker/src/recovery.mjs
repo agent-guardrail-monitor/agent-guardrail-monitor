@@ -136,3 +136,39 @@ export function buildRecoveryPlan(payload = {}, guardResult = {}, attempt = 1) {
       : "Correct only the listed violations, preserve everything else that is valid, then submit the corrected candidate for recheck using the same recoverySessionId."
   };
 }
+
+
+function recoverySessionError(code, session, extra = {}) {
+  return Object.assign(new Error(code.toLowerCase()), {
+    code,
+    recoverySessionId: session?.id || null,
+    ...extra
+  });
+}
+
+export function resolveRecoveryAttempt(session, candidateFingerprint, candidateProjectId = null) {
+  if (!session) {
+    return { attempt: 1, replayed: false };
+  }
+
+  if (session.closed_at || session.phase === RECOVERY_PHASES.ALLOW || session.phase === RECOVERY_PHASES.SAFE_STOP) {
+    throw recoverySessionError("RECOVERY_SESSION_CLOSED", session, { phase: session.phase });
+  }
+
+  const sessionProject = session.project_id || null;
+  const candidateProject = candidateProjectId || null;
+  if (sessionProject !== candidateProject) {
+    throw recoverySessionError("RECOVERY_PROJECT_MISMATCH", session, {
+      sessionProject,
+      candidateProject
+    });
+  }
+
+  const replayed = session.last_request_fingerprint === candidateFingerprint;
+  return {
+    attempt: replayed
+      ? session.attempt
+      : Math.min(session.attempt + 1, RECOVERY_MAX_ATTEMPTS),
+    replayed
+  };
+}
