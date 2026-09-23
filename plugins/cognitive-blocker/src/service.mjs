@@ -7,7 +7,7 @@ import {
   getRecoverySession,
   updateRecoverySession
 } from "./recovery-db.mjs";
-import { buildRecoveryPlan, RECOVERY_MAX_ATTEMPTS } from "./recovery.mjs";
+import { buildRecoveryPlan, resolveRecoveryAttempt } from "./recovery.mjs";
 
 function unique(values) {
   return [...new Set(values.filter(Boolean))];
@@ -25,10 +25,6 @@ function fingerprintPayload(payload) {
   delete normalized.recoverySessionId;
   delete normalized.requestFingerprint;
   return crypto.createHash("sha256").update(JSON.stringify(normalized)).digest("hex");
-}
-
-function recoveryError(code, extra = {}) {
-  return Object.assign(new Error(code.toLowerCase()), { code, ...extra });
 }
 
 export function applyMemoryContext(payload, memoryItems) {
@@ -76,36 +72,23 @@ export async function evaluateForAccount(accountId, payload) {
     candidatePayload.requestFingerprint || fingerprintPayload(candidatePayload);
 
   let recoverySession = null;
-  let attempt = 1;
 
   if (recoverySessionId) {
     recoverySession = await getRecoverySession(accountId, recoverySessionId);
-
     if (!recoverySession) {
-      throw recoveryError("RECOVERY_SESSION_NOT_FOUND", { recoverySessionId });
-    }
-
-    if (recoverySession.closed_at) {
-      throw recoveryError("RECOVERY_SESSION_CLOSED", {
-        recoverySessionId,
-        phase: recoverySession.phase
+      throw Object.assign(new Error("recovery_session_not_found"), {
+        code: "RECOVERY_SESSION_NOT_FOUND",
+        recoverySessionId
       });
     }
-
-    const sessionProject = recoverySession.project_id || null;
-    const candidateProject = candidatePayload.projectId || null;
-    if (sessionProject !== candidateProject) {
-      throw recoveryError("RECOVERY_PROJECT_MISMATCH", {
-        recoverySessionId,
-        sessionProject,
-        candidateProject
-      });
-    }
-
-    attempt = recoverySession.last_request_fingerprint === candidateFingerprint
-      ? recoverySession.attempt
-      : Math.min(recoverySession.attempt + 1, RECOVERY_MAX_ATTEMPTS);
   }
+
+  const recoveryAttempt = resolveRecoveryAttempt(
+    recoverySession,
+    candidateFingerprint,
+    candidatePayload.projectId || null
+  );
+  const attempt = recoveryAttempt.attempt;
 
   const featureOverrides = await listFeatureFlags(accountId);
   const features = resolveFeatures(featureOverrides);
