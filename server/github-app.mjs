@@ -5,6 +5,11 @@ import { agmMcpNodeHandler } from "./chatgpt-mcp.mjs";
 import { PRODUCT_VERSION } from "../src/core.mjs";
 import { summarizeMarketplacePurchase } from "../src/marketplace.mjs";
 import { createOAuthTransaction, verifyOAuthTransaction } from "../src/github-oauth.mjs";
+import { createOpenAIRepairModel } from "../src/repair/openai-model.mjs";
+import { createGitHubRepairClient } from "../src/repair/github-client.mjs";
+import { executeRepairCycle } from "../src/repair/executor.mjs";
+import { parseRepairConfig } from "../src/repair/config.mjs";
+import { compareRepositoryScans } from "../src/repair/regression.mjs";
 
 const PORT = Number(process.env.PORT || 3000);
 const APP_ID = String(process.env.GITHUB_APP_ID || "").trim();
@@ -19,6 +24,7 @@ const OAUTH_CALLBACK_URL = String(
   process.env.GITHUB_OAUTH_CALLBACK_URL || "https://agent-guardrail-monitor.onrender.com/oauth/callback"
 ).trim();
 const OAUTH_COOKIE_NAME = "agm_oauth";
+const REPAIR_MODEL = createOpenAIRepairModel();
 
 function readSecretFile(filePath) {
   try {
@@ -221,6 +227,11 @@ async function listDirectory(owner, repo, dirPath, token, ref) {
   return Array.isArray(data) ? data : [];
 }
 
+async function readRepairConfig(owner, repo, token, ref) {
+  const text = await readContent(owner, repo, ".agent-guardrail-monitor/config.json", token, ref);
+  return parseRepairConfig(text);
+}
+
 function parseJsonConfig(runtime, filePath, text) {
   const result = { runtime, filePath, events: [], fails: [], unknowns: [] };
   try {
@@ -291,6 +302,90 @@ async function scanRepository(owner, repo, token, ref) {
   return { state, results, fails, unknowns };
 }
 
+async function verifyRepairCandidate({ owner, repo, token, baselineScan, ref }) {
+  const candidate = await scanRepository(owner, repo, token, ref);
+  const comparison = compareRepositoryScans(baselineScan, candidate);
+  const pass = comparison.verdict === "PASS" && candidate.fails.length === 0;
+  return {
+    pass,
+    summary: pass ? "Original guardrail regression no longer reproduces." : "Guardrail regression still reproduces.",
+    evidence: JSON.stringify({
+      state: candidate.state,
+      remainingRegressions: comparison.regressions,
+      failCount: candidate.fails.length
+    })
+  };
+}
+
+async function attemptAutomatedRepair({
+  owner,
+  repo,
+  installationId,
+  beforeSha,
+  afterSha,
+  defaultBranch,
+  currentScan
+}) {
+  if (!REPAIR_MODEL.configured) {
+    console.log(JSON.stringify({
+      event: "repair_engine_unavailable",
+      owner,
+      repo,
+      sha: afterSha,
+      reason: "OPENAI_API_KEY is not configured"
+    }));
+    return { status: "REPAIR_ENGINE_UNAVAILABLE" };
+  }
+
+  const token = await installationToken(installationId);
+  const baselineScan = await scanRepository(owner, repo, token, beforeSha);
+  const activeScan = currentScan || await scanRepository(owner, repo, token, afterSha);
+  const regression = compareRepositoryScans(baselineScan, activeScan);
+  if (regression.verdict !== "FAIL") return { status: "NO_REPAIR_REQUIRED" };
+
+  const config = await readRepairConfig(owner, repo, token, afterSha);
+  if (config.configError) {
+    console.log(JSON.stringify({ event: "repair_config_invalid", owner, repo, sha: afterSha }));
+    return { status: "REPAIR_CONFIG_INVALID" };
+  }
+  if (!config.enabled) return { status: "AUTO_REPAIR_DISABLED" };
+
+  const repoClient = createGitHubRepairClient({ api, token, owner, repo });
+  const result = await executeRepairCycle({
+    owner,
+    repo,
+    defaultBranch,
+    objective: "Restore the guardrail controls that regressed on the default branch and verify the repair.",
+    failureEvidence: regression.failureEvidence,
+    repoClient,
+    repairModel: REPAIR_MODEL,
+    verify: ({ ref }) => verifyRepairCandidate({
+      owner,
+      repo,
+      token,
+      baselineScan,
+      ref
+    }),
+    options: {
+      autoMerge: config.autoMerge,
+      waitForChecks: config.waitForChecks,
+      allowWorkflowChanges: config.allowWorkflowChanges,
+      checkTimeoutMs: config.checkTimeoutMs
+    }
+  });
+
+  console.log(JSON.stringify({
+    event: "repair_cycle_completed",
+    owner,
+    repo,
+    detectedAt: afterSha,
+    repairStatus: result.status,
+    finalState: result.finalState,
+    pullRequest: result.pullRequest || null
+  }));
+  return result;
+}
+
 function markdown(scan) {
   const lines = [
     `**Guardrail status: ${scan.state}**`,
@@ -338,6 +433,7 @@ async function publishCheck({ owner, repo, sha, installationId }) {
     }
   });
   console.log(JSON.stringify({ event: "check_published", owner, repo, sha, state: scan.state }));
+  return { scan, token };
 }
 
 function verifySignature(rawBody, signature) {
@@ -359,12 +455,37 @@ async function handleWebhook(event, payload) {
   if (!installationId || !repo) return;
 
   if (event === "push" && payload.after && !/^0+$/.test(payload.after)) {
-    await publishCheck({
+    const published = await publishCheck({
       owner: repo.owner.login,
       repo: repo.name,
       sha: payload.after,
       installationId
     });
+
+    const defaultBranch = repo.default_branch || "main";
+    const defaultRef = `refs/heads/${defaultBranch}`;
+    const beforeSha = String(payload.before || "");
+    if (payload.ref === defaultRef && beforeSha && !/^0+$/.test(beforeSha)) {
+      try {
+        await attemptAutomatedRepair({
+          owner: repo.owner.login,
+          repo: repo.name,
+          installationId,
+          beforeSha,
+          afterSha: payload.after,
+          defaultBranch,
+          currentScan: published.scan
+        });
+      } catch (error) {
+        console.error(JSON.stringify({
+          event: "auto_repair_error",
+          owner: repo.owner.login,
+          repo: repo.name,
+          sha: payload.after,
+          message: error.message
+        }));
+      }
+    }
     return;
   }
 
@@ -398,7 +519,7 @@ const server = http.createServer((req, res) => {
   }
 
   if (req.method === "GET" && url.pathname === "/health") {
-    return send(res, 200, JSON.stringify({ ok: true, configured: configured(), version: PRODUCT_VERSION, mcp: true, commit: DEPLOY_SHA }), "application/json");
+    return send(res, 200, JSON.stringify({ ok: true, configured: configured(), version: PRODUCT_VERSION, mcp: true, commit: DEPLOY_SHA, repair: { configured: REPAIR_MODEL.configured, model: REPAIR_MODEL.model } }), "application/json");
   }
 
   if (req.method === "GET" && url.pathname === "/setup") {
