@@ -432,6 +432,445 @@ async function attemptAutomatedRepair({
   return result;
 }
 
+function auditKindLabel(kind) {
+  if (kind === "initial") return "inicial";
+  if (kind === "manual") return "agora";
+  return "diária";
+}
+
+function encodeAuditMeta(meta) {
+  return "guardiao:" + Buffer.from(JSON.stringify(meta), "utf8").toString("base64url");
+}
+
+function decodeAuditMeta(value) {
+  const text = String(value || "");
+  if (!text.startsWith("guardiao:")) return null;
+  try {
+    return JSON.parse(Buffer.from(text.slice(9), "base64url").toString("utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function repairPublicStatus(result) {
+  const status = String(result?.status || "");
+  if (!result || status === "NO_REPAIR_REQUIRED") {
+    return "Nenhum conserto foi necessário.";
+  }
+  if (status === "AUTO_REPAIR_VERIFIED") {
+    return "O conserto foi aplicado e testado.";
+  }
+  if (status === "VERIFIED_REPAIR_PR_OPENED") {
+    return "O conserto foi preparado e testado. Está separado para revisão.";
+  }
+  if (status === "REPAIR_PR_OPENED_NEEDS_REVIEW") {
+    return "O conserto foi preparado, mas ainda precisa de revisão.";
+  }
+  if (status === "AUTO_REPAIR_DISABLED") {
+    return "O conserto automático está desligado para este repositório.";
+  }
+  return "A falha foi registrada e o conserto precisa de revisão.";
+}
+
+async function listAppInstallations() {
+  const installations = [];
+  for (let page = 1; page <= 20; page += 1) {
+    const batch = await api(`/app/installations?per_page=100&page=${page}`, {
+      token: appJwt()
+    });
+    if (!Array.isArray(batch) || !batch.length) break;
+    installations.push(...batch);
+    if (batch.length < 100) break;
+  }
+  return installations;
+}
+
+async function listInstallationRepositories(installationId, token = null) {
+  const installationTokenValue = token || await installationToken(installationId);
+  const repositories = [];
+  for (let page = 1; page <= 50; page += 1) {
+    const data = await api(`/installation/repositories?per_page=100&page=${page}`, {
+      token: installationTokenValue
+    });
+    const batch = Array.isArray(data?.repositories) ? data.repositories : [];
+    repositories.push(...batch);
+    if (batch.length < 100) break;
+  }
+  return { token: installationTokenValue, repositories };
+}
+
+async function repositoryHead(owner, repo, token, defaultBranch) {
+  const branch = String(defaultBranch || "main");
+  const ref = await api(
+    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/ref/heads/${branch.split("/").map(encodeURIComponent).join("/")}`,
+    { token }
+  );
+  return ref?.object?.sha || null;
+}
+
+async function commitParent(owner, repo, token, sha) {
+  const commit = await api(
+    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/commits/${encodeURIComponent(sha)}`,
+    { token }
+  );
+  return commit?.parents?.[0]?.sha || null;
+}
+
+async function publishAuditRecord({
+  token,
+  owner,
+  repo,
+  sha,
+  kind,
+  scan,
+  repairResult
+}) {
+  const createdAt = new Date().toISOString();
+  const meta = {
+    v: 1,
+    k: kind,
+    d: brazilDate(new Date(createdAt)),
+    t: createdAt,
+    s: scan.state,
+    f: scan.fails.length,
+    u: scan.unknowns.length,
+    r: repairResult?.status || null,
+    p: repairResult?.pullRequest?.number || null
+  };
+  const conclusion = scan.state === "FAIL"
+    ? "failure"
+    : scan.state === "PASS"
+      ? "success"
+      : "neutral";
+  const summary = [
+    markdown(scan),
+    "",
+    "### Conserto",
+    repairPublicStatus(repairResult),
+    "",
+    `Auditoria ${auditKindLabel(kind)} concluída em ${meta.d}.`
+  ].join("\n").slice(0, 65000);
+
+  const run = await api(
+    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/check-runs`,
+    {
+      token,
+      method: "POST",
+      body: {
+        name: AUDIT_CHECK_NAME,
+        head_sha: sha,
+        status: "completed",
+        conclusion,
+        external_id: encodeAuditMeta(meta),
+        details_url: REPO_URL,
+        output: {
+          title: `Auditoria ${auditKindLabel(kind)}: ${publicState(scan.state)}`,
+          summary
+        }
+      }
+    }
+  );
+
+  return {
+    id: run?.id || null,
+    repository: `${owner}/${repo}`,
+    kind,
+    date: meta.d,
+    createdAt,
+    status: publicState(scan.state),
+    fails: meta.f,
+    unknowns: meta.u,
+    repair: repairPublicStatus(repairResult),
+    repairStatus: meta.r,
+    pullRequest: meta.p
+  };
+}
+
+async function runRepositoryAudit({
+  installationId,
+  repository,
+  token,
+  kind = "daily"
+}) {
+  const owner = repository.owner?.login;
+  const repo = repository.name;
+  const defaultBranch = repository.default_branch || "main";
+  if (!owner || !repo) throw new Error("repositório inválido");
+
+  const sha = await repositoryHead(owner, repo, token, defaultBranch);
+  if (!sha) throw new Error("não foi possível localizar a versão atual do repositório");
+
+  const scan = await scanRepository(owner, repo, token, sha);
+  let repairResult = null;
+
+  if (scan.state === "FAIL") {
+    const beforeSha = await commitParent(owner, repo, token, sha);
+    if (beforeSha) {
+      try {
+        repairResult = await attemptAutomatedRepair({
+          owner,
+          repo,
+          installationId,
+          beforeSha,
+          afterSha: sha,
+          defaultBranch,
+          currentScan: scan
+        });
+      } catch (error) {
+        repairResult = {
+          status: "REPAIR_BLOCKED",
+          reason: String(error.message || error)
+        };
+      }
+    }
+  }
+
+  return publishAuditRecord({
+    token,
+    owner,
+    repo,
+    sha,
+    kind,
+    scan,
+    repairResult
+  });
+}
+
+async function runInstallationAudit({
+  installationId,
+  kind = "daily",
+  repository = null
+}) {
+  const listed = await listInstallationRepositories(installationId);
+  let repositories = listed.repositories;
+  const requested = String(repository || "").trim();
+  if (requested) {
+    repositories = repositories.filter((item) =>
+      item.full_name === requested || item.name === requested
+    );
+  }
+
+  const reports = [];
+  for (const item of repositories) {
+    try {
+      reports.push(await runRepositoryAudit({
+        installationId,
+        repository: item,
+        token: listed.token,
+        kind
+      }));
+    } catch (error) {
+      reports.push({
+        repository: item.full_name || item.name,
+        kind,
+        status: "DESCONHECIDO",
+        error: String(error.message || error)
+      });
+    }
+  }
+  return reports;
+}
+
+async function recentCommitShas(owner, repo, token, defaultBranch) {
+  const shas = new Set();
+  const head = await repositoryHead(owner, repo, token, defaultBranch);
+  if (head) shas.add(head);
+
+  const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+  const commits = await api(
+    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/commits?sha=${encodeURIComponent(defaultBranch)}&since=${encodeURIComponent(since)}&per_page=50`,
+    { token }
+  );
+  for (const commit of Array.isArray(commits) ? commits : []) {
+    if (commit?.sha) shas.add(commit.sha);
+  }
+  return [...shas];
+}
+
+function auditRecordFromCheck(repository, run) {
+  const meta = decodeAuditMeta(run?.external_id);
+  if (!meta) return null;
+  return {
+    repository,
+    kind: meta.k,
+    date: meta.d,
+    createdAt: meta.t || run?.completed_at || run?.started_at || null,
+    status: publicState(meta.s),
+    fails: Number(meta.f || 0),
+    unknowns: Number(meta.u || 0),
+    repairStatus: meta.r || null,
+    pullRequest: meta.p || null,
+    summary: run?.output?.summary || null
+  };
+}
+
+async function listAuditsForRepository({
+  token,
+  repository,
+  limit = 20
+}) {
+  const owner = repository.owner?.login;
+  const repo = repository.name;
+  const defaultBranch = repository.default_branch || "main";
+  const records = [];
+  const shas = await recentCommitShas(owner, repo, token, defaultBranch);
+
+  for (const sha of shas) {
+    const data = await api(
+      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/commits/${encodeURIComponent(sha)}/check-runs?filter=all&per_page=100`,
+      { token }
+    );
+    for (const run of data?.check_runs || []) {
+      if (run?.name !== AUDIT_CHECK_NAME) continue;
+      const record = auditRecordFromCheck(repository.full_name, run);
+      if (record) records.push(record);
+    }
+  }
+
+  records.sort((a, b) =>
+    String(b.createdAt || "").localeCompare(String(a.createdAt || ""))
+  );
+  return records.slice(0, limit);
+}
+
+async function selectedRepositories(installationId, repository = null) {
+  const listed = await listInstallationRepositories(installationId);
+  const requested = String(repository || "").trim();
+  const repositories = requested
+    ? listed.repositories.filter((item) =>
+        item.full_name === requested || item.name === requested
+      )
+    : listed.repositories;
+  return { token: listed.token, repositories };
+}
+
+async function ensureDailyAudit(installationId, repository = null) {
+  const selected = await selectedRepositories(installationId, repository);
+  const today = brazilDate();
+  const executed = [];
+
+  for (const item of selected.repositories) {
+    const recent = await listAuditsForRepository({
+      token: selected.token,
+      repository: item,
+      limit: 20
+    });
+    const exists = recent.some((record) =>
+      record.kind === "daily" && record.date === today
+    );
+    if (!exists) {
+      executed.push(await runRepositoryAudit({
+        installationId,
+        repository: item,
+        token: selected.token,
+        kind: "daily"
+      }));
+    }
+  }
+  return { selected, executed };
+}
+
+async function auditHistory({
+  installationId,
+  repository = null,
+  limit = 7,
+  ensureToday = false
+}) {
+  if (ensureToday) await ensureDailyAudit(installationId, repository);
+  const selected = await selectedRepositories(installationId, repository);
+  const records = [];
+  for (const item of selected.repositories) {
+    records.push(...await listAuditsForRepository({
+      token: selected.token,
+      repository: item,
+      limit
+    }));
+  }
+  records.sort((a, b) =>
+    String(b.createdAt || "").localeCompare(String(a.createdAt || ""))
+  );
+  return {
+    connected: true,
+    repositories: selected.repositories.map((item) => item.full_name),
+    audits: records.slice(0, limit)
+  };
+}
+
+const auditApi = {
+  async pending({ installationId, platform, repository }) {
+    const history = await auditHistory({
+      installationId,
+      repository,
+      limit: 5,
+      ensureToday: true
+    });
+    return {
+      ...history,
+      platform,
+      mensagem: history.audits.length
+        ? "Estas são as auditorias mais recentes do O Guardião."
+        : "Ainda não há auditorias registradas."
+    };
+  },
+
+  async latest({ installationId, repository }) {
+    const history = await auditHistory({
+      installationId,
+      repository,
+      limit: 1,
+      ensureToday: true
+    });
+    return {
+      connected: true,
+      repositories: history.repositories,
+      audit: history.audits[0] || null
+    };
+  },
+
+  async history({ installationId, repository, limit }) {
+    return auditHistory({
+      installationId,
+      repository,
+      limit,
+      ensureToday: false
+    });
+  },
+
+  async runNow({ installationId, repository }) {
+    const reports = await runInstallationAudit({
+      installationId,
+      repository,
+      kind: "manual"
+    });
+    return {
+      connected: true,
+      mensagem: "Verificação concluída.",
+      audits: reports
+    };
+  }
+};
+
+async function runAllDailyAudits() {
+  const installations = await listAppInstallations();
+  const results = [];
+  for (const installation of installations) {
+    try {
+      const before = await ensureDailyAudit(installation.id);
+      results.push({
+        installationId: installation.id,
+        repositories: before.selected.repositories.length,
+        executed: before.executed.length
+      });
+    } catch (error) {
+      results.push({
+        installationId: installation.id,
+        error: String(error.message || error)
+      });
+    }
+  }
+  return results;
+}
+
 function publicState(state) {
   if (state === "PASS") return "APROVADO";
   if (state === "FAIL") return "FALHA";
