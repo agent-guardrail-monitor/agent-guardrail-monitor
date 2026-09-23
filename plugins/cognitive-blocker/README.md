@@ -2,7 +2,7 @@
 
 Internal account-scoped cognitive control layer for ChatGPT, Claude, Gemini and compatible AI runtimes.
 
-Current package version: **0.3.0**  
+Current package version: **0.4.0**  
 Canonical ruleset: **2026-09-23.1**
 
 ## Product contract
@@ -19,6 +19,7 @@ See:
 - `docs/FEATURE-CATALOG.md` — internal modules and feature flags.
 - `docs/PREMIUM-QUALITY.md` — fast-check, disposable PostgreSQL, mutation testing and runtime dependency gates.
 - `src/recovery.mjs` — controlled correction state machine after a canonical BLOCK.
+- `docs/ALWAYS-ON-ACCOUNT.md` — account-wide automatic context and per-chat isolation.
 
 ## Internal dependency order
 
@@ -32,6 +33,30 @@ See:
 8. Automated unit, integration and conditional database E2E tests.
 
 No external RBAC provider, feature-flag service, error tracker or monitoring SaaS is required by these controls.
+
+## ALWAYS_ON account operation
+
+After installation, the plugin instance is fixed to `ALWAYS_ON` and automatic chat registration.
+
+The user does not need to activate the plugin again for each chat.
+
+For every controlled user turn, the platform adapter automatically:
+
+1. identifies the installed account;
+2. supplies the platform conversation reference;
+3. auto-registers the chat if it is new;
+4. rehydrates context before candidate generation;
+5. checks the candidate before release;
+6. persists the assistant turn only after `ALLOW`.
+
+The account has two memory layers:
+
+- account-wide durable memory: valid decisions, restrictions, frozen elements, preferences, project state and success criteria;
+- chat-local episodic history: messages and accepted responses from that chat only.
+
+Raw history from one chat is never automatically injected into another chat.
+
+See `docs/ALWAYS-ON-ACCOUNT.md`.
 
 ## Account model / multi-tenancy
 
@@ -64,7 +89,9 @@ Protected tenant tables include:
 - task contracts;
 - guard events;
 - feature flags;
-- internal error reports.
+- internal error reports;
+- conversations;
+- accepted conversation turns.
 
 Authentication lookup tables remain outside tenant RLS so an instance token can be resolved before a tenant context exists.
 
@@ -239,6 +266,7 @@ Authenticated endpoints use:
 Core endpoints:
 
 - `GET /v1/status`
+- `POST /v1/turn/begin` — internal automatic turn bootstrap and context rehydration
 - `POST /v1/check` — returns ALLOW/BLOCK plus the controlled recovery state; corrected retries send the returned `recoverySessionId`
 - `PUT /v1/memory`
 - `GET /v1/memory`
@@ -253,6 +281,7 @@ Only the token hash is stored.
 ## MCP tools
 
 - `cognitive_blocker_status`
+- `cognitive_turn_begin`
 - `cognitive_blocker_check`
 - `cognitive_memory_put`
 - `cognitive_memory_list`
@@ -284,6 +313,7 @@ Apply in order:
 1. `sql/001_init.sql`
 2. `sql/002_internal_control_plane.sql`
 3. `sql/003_recovery_sessions.sql`
+4. `sql/004_account_wide_conversations.sql`
 
 The second migration adds:
 
@@ -294,6 +324,8 @@ The second migration adds:
 - forced RLS policies.
 
 The third migration adds tenant-isolated controlled recovery sessions with a fixed three-attempt policy.
+
+The fourth migration adds account-wide ALWAYS_ON installation state, auto-registered conversations, accepted chat turns, deterministic turn positions, internal full-text retrieval and forced RLS for both conversations and turns.
 
 These migrations are prepared but the real Neon database E2E remains pending until the approved Neon connection is available.
 
@@ -342,7 +374,7 @@ The plugin is not marked production-complete until all of the following are veri
 
 1. code syntax checks pass;
 2. automated test suite passes;
-3. both database migrations are applied to the intended database;
+3. all four database migrations are applied to the intended database;
 4. real PostgreSQL RLS E2E proves account A cannot access account B;
 5. Render health returns 200;
 6. authenticated ALLOW/BLOCK behavior passes against the real database.
