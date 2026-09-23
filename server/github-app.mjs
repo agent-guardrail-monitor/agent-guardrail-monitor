@@ -1,7 +1,7 @@
 import http from "node:http";
 import crypto from "node:crypto";
 import fs from "node:fs";
-import { agmMcpNodeHandler } from "./chatgpt-mcp.mjs";
+import { createAgmMcpNodeHandler } from "./chatgpt-mcp.mjs";
 import { PRODUCT_VERSION } from "../src/core.mjs";
 import { summarizeMarketplacePurchase } from "../src/marketplace.mjs";
 import { createOAuthTransaction, verifyOAuthTransaction } from "../src/github-oauth.mjs";
@@ -19,6 +19,11 @@ const PRIVATE_KEY_PATH = String(process.env.GITHUB_PRIVATE_KEY_PATH || "/etc/sec
 const WEBHOOK_SECRET_PATH = String(process.env.GITHUB_WEBHOOK_SECRET_PATH || "/etc/secrets/webhook-secret.txt");
 const REPO_URL = "https://github.com/agent-guardrail-monitor/agent-guardrail-monitor";
 const PUBLIC_NAME = "O Guardião - W";
+const PUBLIC_BASE_URL = String(
+  process.env.GUARDIAN_PUBLIC_URL || "https://agent-guardrail-monitor.onrender.com"
+).replace(/\/$/, "");
+const DAILY_RUN_KEY = String(process.env.GUARDIAN_DAILY_KEY || "").trim();
+const AUDIT_CHECK_NAME = `${PUBLIC_NAME} · Auditoria`;
 const DEPLOY_SHA = String(process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || "").trim() || null;
 const OAUTH_CLIENT_ID = String(process.env.GITHUB_CLIENT_ID || "Iv23lilPmMCpZGickCZN").trim();
 const OAUTH_CLIENT_SECRET = String(process.env.GITHUB_CLIENT_SECRET || "").trim();
@@ -42,6 +47,54 @@ const PRIVATE_KEY = readSecretFile(PRIVATE_KEY_PATH) ||
 const WEBHOOK_SECRET = String(process.env.GITHUB_WEBHOOK_SECRET || "").trim() ||
   readSecretFile(WEBHOOK_SECRET_PATH);
 const OAUTH_STATE_SECRET = String(process.env.GITHUB_OAUTH_STATE_SECRET || "").trim() || WEBHOOK_SECRET;
+
+function connectorSignature(installationId, platform) {
+  const id = Number(installationId);
+  const target = String(platform || "").trim().toLowerCase();
+  if (!Number.isSafeInteger(id) || id <= 0) throw new Error("instalação inválida");
+  if (!["chatgpt", "claude"].includes(target)) throw new Error("plataforma inválida");
+  if (!WEBHOOK_SECRET) throw new Error("assinatura de conexão indisponível");
+  return crypto.createHmac("sha256", WEBHOOK_SECRET)
+    .update(`${id}:${target}`)
+    .digest("base64url");
+}
+
+function connectorUrl(installationId, platform) {
+  const url = new URL("/mcp", PUBLIC_BASE_URL);
+  url.searchParams.set("installation_id", String(installationId));
+  url.searchParams.set("platform", platform);
+  url.searchParams.set("token", connectorSignature(installationId, platform));
+  return url.toString();
+}
+
+function connectorContext(url) {
+  const installationId = Number(url.searchParams.get("installation_id") || 0);
+  const platform = String(url.searchParams.get("platform") || "").trim().toLowerCase();
+  const supplied = String(url.searchParams.get("token") || "");
+  if (!installationId && !platform && !supplied) return null;
+  if (!installationId || !platform || !supplied) return false;
+
+  let expected;
+  try {
+    expected = connectorSignature(installationId, platform);
+  } catch {
+    return false;
+  }
+  const a = Buffer.from(expected);
+  const b = Buffer.from(supplied);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return false;
+  return { installationId, platform };
+}
+
+function brazilDate(value = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(value);
+}
+
 
 function configured() {
   return Boolean(APP_ID && PRIVATE_KEY && WEBHOOK_SECRET);
