@@ -6,11 +6,15 @@
     "src/feature-catalog.mjs",
     "src/internal-errors.mjs"
   ],
-  "testRunner": "command",
-  "commandRunner": {
-    "command": "npm run test:mutation:unit"
+  "testRunner": "tap",
+  "tap": {
+    "testFiles": [
+      "test/engine.test.mjs",
+      "test/engine-contract.test.mjs",
+      "test/control-plane.test.mjs"
+    ],
+    "forceBail": true
   },
-  "coverageAnalysis": "off",
   "reporters": [
     "clear-text",
     "progress"
