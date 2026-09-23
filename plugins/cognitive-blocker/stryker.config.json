@@ -1,0 +1,25 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "mutate": [
+    "src/engine.mjs",
+    "src/rbac.mjs",
+    "src/feature-catalog.mjs",
+    "src/internal-errors.mjs"
+  ],
+  "testRunner": "command",
+  "commandRunner": {
+    "command": "npm run test:mutation:unit"
+  },
+  "coverageAnalysis": "off",
+  "reporters": [
+    "clear-text",
+    "progress"
+  ],
+  "thresholds": {
+    "high": 90,
+    "low": 80,
+    "break": 80
+  },
+  "concurrency": 2,
+  "timeoutMS": 15000
+}
