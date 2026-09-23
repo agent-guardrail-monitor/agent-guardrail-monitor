@@ -83,6 +83,17 @@ export async function executeRepairCycle({
     baseline: baselineContext,
     current: currentContext
   };
+  const allowedRepairPaths = new Set(
+    [...baselineContext, ...currentContext]
+      .map((item) => item.path)
+      .filter((path) =>
+        path === ".claude/settings.json" ||
+        path === ".claude/settings.local.json" ||
+        path === ".codex/hooks.json" ||
+        path === ".codex/config.toml" ||
+        path.startsWith(".github/hooks/")
+      )
+  );
 
   const proposed = await repairModel.proposeRepair({
     objective,
@@ -90,7 +101,8 @@ export async function executeRepairCycle({
     repositoryContext
   });
   const validation = validateRepairPlan(proposed, {
-    allowWorkflowChanges: options.allowWorkflowChanges === true
+    allowWorkflowChanges: options.allowWorkflowChanges === true,
+    allowedPaths: allowedRepairPaths
   });
   if (!validation.valid) {
     return {
@@ -194,7 +206,10 @@ export async function executeRepairCycle({
     }
   }
 
-  const repairVerified = verification?.pass === true && ci.status !== "failed";
+  const ciSatisfied = options.waitForChecks === false
+    ? true
+    : ci.status === "passed";
+  const repairVerified = verification?.pass === true && ciSatisfied;
   const canAutoMerge = options.autoMerge === true && repairVerified;
 
   if (!canAutoMerge) {
