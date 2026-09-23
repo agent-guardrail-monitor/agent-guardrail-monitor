@@ -5,6 +5,7 @@ import { validateRepairPlan } from "../src/repair/plan.mjs";
 import { executeRepairCycle } from "../src/repair/executor.mjs";
 import { compareRepositoryScans } from "../src/repair/regression.mjs";
 import { parseRepairConfig } from "../src/repair/config.mjs";
+import { createOpenAIRepairModel } from "../src/repair/openai-model.mjs";
 
 const validPlan = {
   summary: "Restore disabled hook configuration",
@@ -170,4 +171,55 @@ test("repair model receives both pre-regression baseline and broken commit conte
   assert.equal(observedContext.currentRef, "after222");
   assert.equal(observedContext.baselineRef, "before111");
   assert.match(observedContext.baseline[0].content, /PreToolUse/);
+});
+
+
+test("OpenAI repair provider uses structured output with store disabled", async () => {
+  let requestBody;
+  const model = createOpenAIRepairModel({
+    apiKey: "test-key",
+    model: "test-model",
+    fetchImpl: async (_url, init) => {
+      requestBody = JSON.parse(init.body);
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return JSON.stringify({
+            output: [{
+              content: [{
+                type: "output_text",
+                text: JSON.stringify(validPlan)
+              }]
+            }]
+          });
+        }
+      };
+    }
+  });
+
+  const plan = await model.proposeRepair({
+    objective: "restore hooks",
+    failureEvidence: ["HOOK_EVENT_REMOVED"],
+    repositoryContext: { baseline: [], current: [] }
+  });
+
+  assert.equal(requestBody.store, false);
+  assert.equal(requestBody.model, "test-model");
+  assert.equal(requestBody.text.format.type, "json_schema");
+  assert.equal(requestBody.text.format.strict, true);
+  assert.equal(plan.rootCause, validPlan.rootCause);
+});
+
+test("OpenAI repair provider refuses execution without an API key", async () => {
+  const model = createOpenAIRepairModel({ apiKey: "" });
+  assert.equal(model.configured, false);
+  await assert.rejects(
+    () => model.proposeRepair({
+      objective: "repair",
+      failureEvidence: ["FAIL"],
+      repositoryContext: {}
+    }),
+    /OPENAI_API_KEY/
+  );
 });
