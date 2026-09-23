@@ -14,6 +14,32 @@ BEGIN
   END IF;
 END $$;
 
+DO $
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'cognitive_task_contracts_id_account_unique'
+  ) THEN
+    ALTER TABLE cognitive_task_contracts
+      ADD CONSTRAINT cognitive_task_contracts_id_account_unique UNIQUE (id, account_id);
+  END IF;
+END $;
+
+ALTER TABLE cognitive_guard_events
+  DROP CONSTRAINT IF EXISTS cognitive_guard_events_task_contract_id_fkey;
+
+DO $
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'cognitive_guard_events_task_account_fk'
+  ) THEN
+    ALTER TABLE cognitive_guard_events
+      ADD CONSTRAINT cognitive_guard_events_task_account_fk
+      FOREIGN KEY (task_contract_id, account_id)
+      REFERENCES cognitive_task_contracts(id, account_id)
+      ON DELETE SET NULL;
+  END IF;
+END $;
+
 CREATE TABLE IF NOT EXISTS cognitive_feature_flags (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   account_id uuid NOT NULL REFERENCES cognitive_accounts(id) ON DELETE CASCADE,
