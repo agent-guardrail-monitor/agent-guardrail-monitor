@@ -1,66 +1,165 @@
 # Cognitive Blocker Plugin
 
-Account-scoped cognitive control layer for ChatGPT, Claude, Gemini and compatible AI runtimes.
+Internal account-scoped cognitive control layer for ChatGPT, Claude, Gemini and compatible AI runtimes.
 
-## Canonical product contract
+Current package version: **0.2.0**  
+Canonical ruleset: **2026-09-23.1**
 
-The product has one fixed purpose: block the 59 behaviors defined in the canonical ruleset while allowing unrelated AI behavior to continue normally.
+## Product contract
 
-It does not create new rules automatically. It does not expand a rule by interpretation. A block requires either a deterministic condition or an evidence-bearing semantic signal for an existing canonical rule.
+The product has one fixed purpose: actively block the 59 approved behaviors on technical paths the plugin actually controls, while leaving unrelated AI behavior operating normally.
 
-## Account model
+The canonical rule catalog is fixed. The plugin does not create new blocking rules automatically and does not silently broaden an existing rule.
 
-Each platform account receives its own instance token and database account ID.
+See:
+
+- `docs/PRD.md` — canonical product requirements.
+- `docs/SYSTEM-MAP.md` — system map and request sequence.
+- `docs/ACCESS-CONTROL.md` — account isolation, RBAC and RLS.
+- `docs/FEATURE-CATALOG.md` — internal modules and feature flags.
+
+## Internal dependency order
+
+1. PRD / canonical contract.
+2. System map and module boundaries.
+3. Account isolation / multi-tenancy.
+4. Internal RBAC.
+5. PostgreSQL Row Level Security.
+6. Internal feature catalog + per-account feature flags.
+7. Internal error reporting.
+8. Automated unit, integration and conditional database E2E tests.
+
+No external RBAC provider, feature-flag service, error tracker or monitoring SaaS is required by these controls.
+
+## Account model / multi-tenancy
+
+Each AI-platform account receives one plugin account/tenant scope.
 
 Examples:
 
-- one ChatGPT account -> one plugin instance;
-- one Claude account -> another plugin instance;
-- one Gemini account -> another plugin instance.
+- one ChatGPT account -> one isolated plugin account;
+- one Claude account -> another isolated plugin account;
+- one Gemini account -> another isolated plugin account.
 
-All persisted records carry account scope. Project-scoped records use composite foreign keys that require the project and account to match.
+`account_id` is the tenant boundary. Project-scoped records also use composite account/project references, so a project from account B cannot be attached to data from account A.
 
-## Components
+## Database RLS
 
-- `src/rule-catalog.mjs` — immutable 59-rule catalog.
-- `src/engine.mjs` — deterministic ALLOW/BLOCK engine.
-- `src/service.mjs` — automatically loads relevant account/project memory before evaluation.
-- `src/db.mjs` — token hashing, account installation, memory and audit persistence.
-- `src/mcp.mjs` — authenticated MCP tools for compatible AI clients.
-- `src/server.mjs` — HTTP API and MCP endpoint.
-- `sql/001_init.sql` — Lakebase Postgres/Neon schema.
-- `test/` — deterministic regression tests.
+The database migration `sql/002_internal_control_plane.sql` enables and **forces** Row Level Security on tenant data.
 
-## Enforcement boundary
+Every tenant transaction sets:
 
-The plugin can hard-block only on paths where it is technically placed before the response/action is accepted or executed.
+`app.current_account_id=<authenticated account_id>`
 
-Examples of enforceable paths:
+RLS policies enforce both reads and writes with that account ID.
 
-- an owned API/model gateway;
-- a custom tool/function loop where every side effect passes through the plugin;
-- runtime hooks that call the local/remote policy engine before execution;
-- an MCP workflow when the host actually invokes the MCP tool as part of the mandatory path.
+Protected tenant tables include:
 
-A normal ChatGPT/Claude/Gemini conversation that never invokes the plugin is outside this server's interception authority. The server must not claim otherwise.
+- projects;
+- cognitive memory;
+- decisions;
+- frozen elements;
+- task contracts;
+- guard events;
+- feature flags;
+- internal error reports.
 
-## Decision model
+Authentication lookup tables remain outside tenant RLS so an instance token can be resolved before a tenant context exists.
 
-`ALLOW` means no canonical blocker was evidenced for that proposed response/action.
+## RBAC
 
-`BLOCK` means at least one canonical rule was triggered.
+Internal roles:
 
-Semantic signals are accepted only when:
+- `OWNER`
+- `ADMIN`
+- `MANAGER`
+- `CLIENT`
 
-1. the rule ID exists in the canonical 59-rule catalog;
+The installation token is created as `OWNER`.
+
+The fixed permission matrix lives in `src/rbac.mjs` and can be inspected through:
+
+- HTTP: `GET /v1/permissions`
+- MCP: `cognitive_permission_matrix`
+
+## Internal feature catalog
+
+Required controls cannot be disabled:
+
+- `core_blocking`
+- `tenant_isolation`
+- `rbac`
+- `database_rls`
+- `cognitive_memory`
+
+Optional account-scoped flags:
+
+- `semantic_signals`
+- `guard_event_history`
+- `internal_error_reporting`
+
+Feature state is stored internally in `cognitive_feature_flags`.
+
+HTTP:
+
+- `GET /v1/features`
+- `PUT /v1/features/:feature`
+
+MCP:
+
+- `cognitive_features_list`
+- `cognitive_feature_set`
+
+## Internal error reporting
+
+The plugin now contains its own error-reporting pipeline.
+
+It captures:
+
+- source/module;
+- error code;
+- bounded message;
+- sanitized context;
+- SHA-256 stack fingerprint;
+- request fingerprint;
+- project scope when available;
+- account scope;
+- status and timestamp.
+
+Secret-like fields such as tokens, passwords, authorization values, cookies and API keys are redacted before persistence.
+
+HTTP:
+
+- `POST /v1/errors`
+- `GET /v1/errors`
+
+MCP:
+
+- `cognitive_report_error`
+- `cognitive_errors_list`
+
+Unhandled authenticated HTTP failures also attempt an internal error record when the feature is enabled. The reporter never calls an external service.
+
+## Canonical blocker engine
+
+`src/rule-catalog.mjs` contains exactly 59 approved rules.
+
+`src/engine.mjs` returns:
+
+- `ALLOW` — no canonical blocker was evidenced;
+- `BLOCK` — one or more canonical rules were triggered.
+
+Semantic signals are considered only when:
+
+1. the rule ID exists in the canonical catalog;
 2. confidence is at least 0.80;
-3. an evidence string is present.
+3. evidence is supplied.
 
-Unknown rules and weak signals are ignored rather than turned into new blocks.
+Unknown or weak signals do not become new rules.
 
-## Persistent cognitive memory
+## Cognitive memory
 
-Memory items keep explicit epistemic state:
+Memory preserves epistemic state:
 
 - EVIDENCE
 - INFERENCE
@@ -69,94 +168,44 @@ Memory items keep explicit epistemic state:
 - UNKNOWN
 - REFUTED
 
-The plugin never needs to rewrite a hypothesis as a fact to store it.
+Account memory and project memory are automatically applied to controlled checks.
 
-Memory types with automatic enforcement behavior in the MVP:
+Supported automatic enforcement types include:
 
-- `frozen_element` with `{ "resource": "header" }`
-- `authorized_resource` with `{ "resource": "auth" }`
-- `success_criterion` with `{ "text": "tests pass", "met": false }`
+- `frozen_element`
+- `authorized_resource`
+- `success_criterion`
 
-Account memory and project memory are loaded automatically before each check.
+Current explicit task scope overrides older stored authorized-resource scope. Frozen elements remain active until explicitly unfrozen.
 
-Current explicit task scope overrides older stored authorized-resource scope. Persisted frozen elements remain active unless the current task explicitly supplies `unfrozenElements`.
+## HTTP API
 
-## API
+Public health:
 
-### Health
+- `GET /health`
 
-`GET /health`
+Install one account instance:
 
-### Install one account instance
+- `POST /v1/install`
+- header: `x-install-secret: <INSTALL_SECRET>`
 
-`POST /v1/install`
-
-Header:
-
-`x-install-secret: <INSTALL_SECRET>`
-
-Body example:
-
-```json
-{
-  "platform": "chatgpt",
-  "externalAccountRef": "opaque-platform-account-id",
-  "label": "Primary ChatGPT account"
-}
-```
-
-The instance token is returned once. Only its SHA-256 hash is stored.
-
-### Evaluate a proposed response/action
-
-`POST /v1/check`
-
-Header:
+Authenticated endpoints use:
 
 `Authorization: Bearer <instance-token>`
 
-Example:
+Core endpoints:
 
-```json
-{
-  "projectId": null,
-  "task": {
-    "authorizedResources": ["auth"],
-    "frozenElements": ["header"],
-    "unmetSuccessCriteria": []
-  },
-  "proposedActions": [
-    { "resource": "auth", "destructive": false },
-    { "resource": "header", "destructive": false }
-  ]
-}
-```
+- `GET /v1/status`
+- `POST /v1/check`
+- `PUT /v1/memory`
+- `GET /v1/memory`
+- `GET /v1/features`
+- `PUT /v1/features/:feature`
+- `POST /v1/errors`
+- `GET /v1/errors`
+- `GET /v1/permissions`
 
-The second action triggers `EXE-002` and the result is `BLOCK`.
-
-### Persist memory
-
-`PUT /v1/memory`
-
-Body example:
-
-```json
-{
-  "key": "freeze-header",
-  "type": "frozen_element",
-  "value": { "resource": "header" },
-  "claimState": "EVIDENCE",
-  "source": "explicit user directive"
-}
-```
-
-### Read memory
-
-`GET /v1/memory`
-
-Optional project scope:
-
-`GET /v1/memory?projectId=<uuid>`
+Only the token hash is stored.
 
 ## MCP tools
 
@@ -164,24 +213,47 @@ Optional project scope:
 - `cognitive_blocker_check`
 - `cognitive_memory_put`
 - `cognitive_memory_list`
+- `cognitive_features_list`
+- `cognitive_feature_set`
+- `cognitive_report_error`
+- `cognitive_errors_list`
+- `cognitive_permission_matrix`
 
-The MCP endpoint is `/mcp` and requires the same Bearer instance token.
+The MCP endpoint is `/mcp` and uses the same account-instance Bearer token.
 
-## Database migration
+## Enforcement boundary
 
-Apply `sql/001_init.sql` to the intended Neon/Lakebase Postgres database before production traffic.
+The plugin can hard-block only where it is on the mandatory pre-action or pre-release path.
 
-The current deployment must not be marked ready until the migration is confirmed on the intended database.
+Examples:
 
-## Environment
+- owned API/model gateway;
+- controlled custom tool/function loop;
+- runtime hook that calls the policy decision before execution;
+- MCP flow in which the host actually invokes the plugin before accepting the action.
 
-- `DATABASE_URL` — pooled application connection string.
-- `INSTALL_SECRET` — protects account-instance installation.
-- `PORT` — supplied by Render; defaults to 10000 locally.
+An ordinary AI-platform turn that never invokes the plugin is outside this server's interception authority.
 
-## Verification
+## Database migrations
 
-Run:
+Apply in order:
+
+1. `sql/001_init.sql`
+2. `sql/002_internal_control_plane.sql`
+
+The second migration adds:
+
+- RBAC role state;
+- internal feature flags;
+- internal error reports;
+- tenant-safe composite references;
+- forced RLS policies.
+
+These migrations are prepared but the real Neon database E2E remains pending until the approved Neon connection is available.
+
+## Automated tests
+
+Normal CI runs:
 
 ```bash
 npm install
@@ -189,10 +261,32 @@ npm run check
 npm test
 ```
 
-A deployment is complete only after:
+This covers:
 
-1. code checks pass;
-2. engine regression tests pass;
-3. database migration is confirmed;
-4. Render health endpoint returns 200;
-5. a real authenticated `/v1/check` returns the expected BLOCK/ALLOW behavior.
+- 59-rule catalog integrity;
+- deterministic blocking;
+- memory-context behavior;
+- RBAC matrix;
+- required/optional feature flags;
+- secret redaction;
+- RLS migration contract;
+- tenant-safe composite foreign keys.
+
+A real database isolation test also exists:
+
+```bash
+RUN_DB_E2E=1 DATABASE_URL=... npm run test:db
+```
+
+It is intentionally skipped unless explicitly enabled.
+
+## Completion criteria
+
+The plugin is not marked production-complete until all of the following are verified:
+
+1. code syntax checks pass;
+2. automated test suite passes;
+3. both database migrations are applied to the intended database;
+4. real PostgreSQL RLS E2E proves account A cannot access account B;
+5. Render health returns 200;
+6. authenticated ALLOW/BLOCK behavior passes against the real database.
