@@ -4,7 +4,7 @@
 
 The plugin uses `account_id` as the tenant boundary. A platform account and its plugin instance share one account scope.
 
-Every project, memory item, approved decision, frozen element, task contract, guard event, feature flag and internal error report carries that account identity.
+Every project, memory item, approved decision, frozen element, task contract, guard event, feature flag, internal error report and recovery session carries that account identity.
 
 PostgreSQL RLS reads `app.current_account_id` inside the active database transaction and refuses rows outside that tenant.
 
@@ -36,3 +36,19 @@ These features are structural and cannot be disabled by feature flags:
 - cognitive memory.
 
 Optional features may be toggled per account while the required control plane remains active.
+
+
+## Recovery-session isolation
+
+`cognitive_recovery_sessions` is protected by forced PostgreSQL RLS.
+
+A recovery session stores only control state needed for the correction loop:
+
+- account/project scope;
+- current phase;
+- attempt counter;
+- request fingerprints;
+- last canonical violations;
+- invalid resource identifiers.
+
+The fixed maximum is three distinct attempts. Recovery state is internal and cannot be shared across accounts.
