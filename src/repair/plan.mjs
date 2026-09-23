@@ -5,14 +5,14 @@ function cleanPath(value) {
   return String(value || "").replaceAll("\\", "/").replace(/^\.\//, "").trim();
 }
 
-function blockedPath(path, allowWorkflowChanges = false) {
+function blockedPath(path) {
   if (!path || path.startsWith("/") || path.includes("../")) return true;
   if (path === ".git" || path.startsWith(".git/")) return true;
-  if (!allowWorkflowChanges && path.startsWith(".github/workflows/")) return true;
+  if (path.startsWith(".github/workflows/")) return true;
   return false;
 }
 
-export function validateRepairPlan(plan, { allowWorkflowChanges = false, allowedPaths = null } = {}) {
+export function validateRepairPlan(plan, { allowedPaths = null } = {}) {
   const errors = [];
   if (!plan || typeof plan !== "object") return { valid: false, errors: ["repair_plan_required"] };
 
@@ -32,7 +32,7 @@ export function validateRepairPlan(plan, { allowWorkflowChanges = false, allowed
     const path = cleanPath(item?.path);
     const content = typeof item?.content === "string" ? item.content : null;
     if (!path) errors.push(`file_${index}_path_required`);
-    if (blockedPath(path, allowWorkflowChanges)) errors.push(`file_${index}_path_blocked`);
+    if (blockedPath(path)) errors.push(`file_${index}_path_blocked`);
     if (allowed && !allowed.has(path)) errors.push(`file_${index}_path_outside_repair_scope`);
     if (seen.has(path)) errors.push(`file_${index}_duplicate_path`);
     seen.add(path);
