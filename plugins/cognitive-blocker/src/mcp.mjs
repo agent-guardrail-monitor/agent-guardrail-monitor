@@ -11,7 +11,7 @@ import {
   setFeatureFlag,
   upsertMemory
 } from "./db.mjs";
-import { resolveFeatures } from "./feature-catalog.mjs";
+import { isFeatureEnabled, resolveFeatures } from "./feature-catalog.mjs";
 import { buildInternalErrorReport } from "./internal-errors.mjs";
 import { assertPermission, PERMISSIONS, permissionMatrix } from "./rbac.mjs";
 
@@ -175,6 +175,10 @@ export function buildCognitiveBlockerMcpServer(context) {
     },
     async (input) => {
       authorize(role, PERMISSIONS.ERRORS_REPORT);
+      const overrides = await listFeatureFlags(accountId);
+      if (!isFeatureEnabled("internal_error_reporting", overrides)) {
+        return response({ stored: false, reason: "internal_error_reporting_disabled" });
+      }
       const report = buildInternalErrorReport(input);
       return response(await recordError(accountId, report));
     }
