@@ -14,7 +14,7 @@ BEGIN
   END IF;
 END $$;
 
-DO $
+DO $$
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_constraint WHERE conname = 'cognitive_task_contracts_id_account_unique'
@@ -22,12 +22,12 @@ BEGIN
     ALTER TABLE cognitive_task_contracts
       ADD CONSTRAINT cognitive_task_contracts_id_account_unique UNIQUE (id, account_id);
   END IF;
-END $;
+END $$;
 
 ALTER TABLE cognitive_guard_events
   DROP CONSTRAINT IF EXISTS cognitive_guard_events_task_contract_id_fkey;
 
-DO $
+DO $$
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_constraint WHERE conname = 'cognitive_guard_events_task_account_fk'
@@ -38,7 +38,7 @@ BEGIN
       REFERENCES cognitive_task_contracts(id, account_id)
       ON DELETE RESTRICT;
   END IF;
-END $;
+END $$;
 
 CREATE TABLE IF NOT EXISTS cognitive_feature_flags (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
