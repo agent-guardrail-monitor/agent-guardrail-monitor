@@ -11,7 +11,8 @@
     "testFiles": [
       "test/engine.test.mjs",
       "test/engine-contract.test.mjs",
-      "test/control-plane.test.mjs"
+      "test/control-plane.test.mjs",
+      "test/control-plane-contract.test.mjs"
     ],
     "forceBail": true
   },
