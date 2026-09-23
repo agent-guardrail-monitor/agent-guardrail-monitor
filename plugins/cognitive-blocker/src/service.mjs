@@ -8,6 +8,7 @@ import {
   updateRecoverySession
 } from "./recovery-db.mjs";
 import { buildRecoveryPlan, resolveRecoveryAttempt } from "./recovery.mjs";
+import { beginAccountTurn, acceptAssistantTurn } from "./context-rehydration.mjs";
 
 function unique(values) {
   return [...new Set(values.filter(Boolean))];
@@ -71,6 +72,22 @@ export async function evaluateForAccount(accountId, payload) {
   const candidateFingerprint =
     candidatePayload.requestFingerprint || fingerprintPayload(candidatePayload);
 
+  let conversationContext = null;
+  if (candidatePayload.platformConversationRef) {
+    conversationContext = await beginAccountTurn(accountId, {
+      platformConversationRef: candidatePayload.platformConversationRef,
+      title: candidatePayload.conversationTitle,
+      metadata: candidatePayload.conversationMetadata,
+      userMessage: candidatePayload.userMessage,
+      userTurnRef: candidatePayload.userTurnRef,
+      requestFingerprint: candidatePayload.userRequestFingerprint || candidateFingerprint,
+      projectId: candidatePayload.projectId,
+      recentLimit: candidatePayload.recentLimit,
+      relevantLimit: candidatePayload.relevantLimit
+    });
+    candidatePayload.conversationId = conversationContext.conversation.id;
+  }
+
   let recoverySession = null;
 
   if (recoverySessionId) {
@@ -117,6 +134,7 @@ export async function evaluateForAccount(accountId, payload) {
 
   const recoveryPlan = buildRecoveryPlan(effectivePayload, result, attempt);
   let persistedRecovery = recoverySession;
+  let acceptedAssistantTurn = null;
 
   if (!recoverySession && result.decision === "BLOCK") {
     persistedRecovery = await createRecoverySession(accountId, {
@@ -138,9 +156,34 @@ export async function evaluateForAccount(accountId, payload) {
     );
   }
 
+  if (result.decision === "ALLOW" && conversationContext) {
+    const assistantMessage = String(
+      candidatePayload.assistantMessage ||
+      candidatePayload.candidateText ||
+      candidatePayload.responseText ||
+      ""
+    ).trim();
+
+    if (assistantMessage) {
+      acceptedAssistantTurn = await acceptAssistantTurn(accountId, {
+        conversationId: conversationContext.conversation.id,
+        assistantTurnRef: candidatePayload.assistantTurnRef,
+        assistantMessage,
+        requestFingerprint: candidateFingerprint
+      });
+    }
+  }
+
   return {
     ...result,
     features,
+    conversation: conversationContext
+      ? {
+          ...conversationContext.conversation,
+          assistantTurnStored: Boolean(acceptedAssistantTurn),
+          blockedCandidateStored: false
+        }
+      : null,
     memoryApplied: memoryItems.map((item) => ({
       key: item.memory_key,
       type: item.memory_type,
