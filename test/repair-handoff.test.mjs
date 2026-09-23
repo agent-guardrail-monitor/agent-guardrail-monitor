@@ -1,9 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildRepairHandoff } from "../src/repair-handoff.mjs";
+import { buildRepairRequest } from "../src/repair-handoff.mjs";
 
-test("repair handoff maps AGM regressions to Software Repair Engineer preflight input", () => {
-  const handoff = buildRepairHandoff({
+test("repair request maps AGM regressions into the integrated repair engine", () => {
+  const handoff = buildRepairRequest({
     regressions: [{
       runtime: "claude",
       code: "PROOF_REGRESSION",
@@ -18,16 +18,17 @@ test("repair handoff maps AGM regressions to Software Repair Engineer preflight 
 
   assert.equal(handoff.status, "REPAIR_REQUIRED");
   assert.equal(handoff.rootCauseState, "UNKNOWN");
-  assert.equal(handoff.consumer.name, "Software Repair Engineer");
-  assert.equal(handoff.consumer.interface, "sre_preflight");
+  assert.equal(handoff.consumer.name, "Agent Guardrail Monitor Repair Engine");
+  assert.equal(handoff.consumer.interface, "agm_repair_preflight");
+  assert.equal(handoff.consumer.integrated, true);
   assert.equal(handoff.repairRequest.failureEvidence.length, 1);
   assert.match(handoff.repairRequest.failureEvidence[0], /PROOF_REGRESSION/);
   assert.equal(handoff.repairRequest.checksRun[0].status, "failed");
   assert.equal(handoff.verification.requiredAfterRepair, true);
 });
 
-test("repair handoff remains non-actionable when AGM has no failure evidence", () => {
-  const handoff = buildRepairHandoff();
+test("integrated repair request remains non-actionable without failure evidence", () => {
+  const handoff = buildRepairRequest();
 
   assert.equal(handoff.status, "NO_REPAIR_REQUIRED");
   assert.deepEqual(handoff.repairRequest.failureEvidence, []);
@@ -35,14 +36,14 @@ test("repair handoff remains non-actionable when AGM has no failure evidence", (
   assert.equal(handoff.verification.requiredAfterRepair, false);
 });
 
-test("repair handoff deduplicates repeated failure evidence", () => {
+test("integrated repair request deduplicates repeated failure evidence", () => {
   const failure = {
     severity: "FAIL",
     runtime: "copilot",
     code: "HOOKS_DISABLED",
     message: "Hooks are disabled."
   };
-  const handoff = buildRepairHandoff({ findings: [failure, failure] });
+  const handoff = buildRepairRequest({ findings: [failure, failure] });
 
   assert.equal(handoff.repairRequest.failureEvidence.length, 1);
 });
