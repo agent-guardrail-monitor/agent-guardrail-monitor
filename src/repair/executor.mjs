@@ -43,6 +43,8 @@ export async function executeRepairCycle({
   owner,
   repo,
   defaultBranch = "main",
+  repairBaseSha,
+  baselineRef,
   objective = "Repair the guardrail regression and restore the approved control.",
   failureEvidence = [],
   repoClient,
@@ -64,13 +66,23 @@ export async function executeRepairCycle({
     };
   }
 
-  const baseSha = await repoClient.getHead(defaultBranch);
-  if (!baseSha) throw new Error(`Unable to resolve default branch ${defaultBranch}`);
+  const baseSha = repairBaseSha || await repoClient.getHead(defaultBranch);
+  if (!baseSha) throw new Error(`Unable to resolve repair base for ${defaultBranch}`);
 
-  const repositoryContext = await repoClient.readRepairContext({
+  const currentContext = await repoClient.readRepairContext({
     ref: baseSha,
     failureEvidence: failures
   });
+  const baselineContext = baselineRef
+    ? await repoClient.readRepairContext({ ref: baselineRef, failureEvidence: failures })
+    : [];
+
+  const repositoryContext = {
+    baselineRef: baselineRef || null,
+    currentRef: baseSha,
+    baseline: baselineContext,
+    current: currentContext
+  };
 
   const proposed = await repairModel.proposeRepair({
     objective,
