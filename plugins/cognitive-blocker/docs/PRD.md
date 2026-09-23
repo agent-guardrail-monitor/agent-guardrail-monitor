@@ -1,7 +1,7 @@
 # PRD — Cognitive Blocker Plugin
 
 Status: canonical internal product contract  
-Version: 2026-09-23.2
+Version: 2026-09-23.3
 
 ## 1. Purpose
 
@@ -21,6 +21,9 @@ The AI remains responsible for reasoning, answering and executing. The plugin is
 8. Completion claims require the applicable proof defined by the canonical blocking rules.
 9. The plugin only claims hard enforcement on mandatory paths it actually controls.
 10. All control-plane functions in this package are internal. No external logging, RBAC, feature-flag or error-reporting service is required.
+11. A BLOCK starts controlled correction rather than being treated as valid completion.
+12. Recovery may attempt at most three distinct candidates in one session; identical replay does not consume an attempt.
+13. Recovery preserves non-violating work and never creates or broadens blocking rules.
 
 ## 3. Functional modules
 
@@ -32,6 +35,7 @@ The AI remains responsible for reasoning, answering and executing. The plugin is
 - Internal feature catalog and per-account flags.
 - Internal error reporting and technical trace capture.
 - Guard/audit event history.
+- Controlled correction/recheck recovery after canonical BLOCK.
 - Automated unit, integration and conditional database E2E tests.
 
 ## 4. Success criteria
@@ -44,6 +48,8 @@ The plugin is considered technically ready only when:
 - mandatory feature tests pass;
 - RLS migration contract tests pass;
 - internal error sanitization tests pass;
+- controlled recovery state-machine tests pass;
+- recovery-session tenant isolation tests pass;
 - CI passes;
 - the intended PostgreSQL migration is applied;
 - a real authenticated database-backed E2E proves account A cannot read or write account B data;
