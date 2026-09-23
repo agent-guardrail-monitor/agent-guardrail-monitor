@@ -208,7 +208,6 @@ async function beginInstallationSetup(res, url) {
       "text/html; charset=utf-8"
     );
   }
-
   try {
     const reports = await runInstallationAudit({ installationId, kind: "initial" });
     console.log(JSON.stringify({
@@ -216,10 +215,12 @@ async function beginInstallationSetup(res, url) {
       installationId,
       repositories: reports.length
     }));
+    const chatgptAddress = connectorUrl(installationId, "chatgpt").replaceAll("&", "&amp;");
+    const claudeAddress = connectorUrl(installationId, "claude").replaceAll("&", "&amp;");
     return send(
       res,
       200,
-      `<!doctype html><meta charset="utf-8"><title>Conectado - ${PUBLIC_NAME}</title><h1>${PUBLIC_NAME} está conectado</h1><p>A auditoria inicial foi executada. O resultado fica disponível para ser apresentado dentro do ChatGPT ou Claude.</p>`,
+      `<!doctype html><meta charset="utf-8"><title>Conectado - ${PUBLIC_NAME}</title><h1>${PUBLIC_NAME} está conectado</h1><p>A auditoria inicial foi executada. O resultado será apresentado dentro da sua IA.</p><h2>Instalar no ChatGPT</h2><p>Copie este endereço e use ao adicionar O Guardião como app/conector:</p><input id="chatgpt" value="${chatgptAddress}" readonly size="90"><button onclick="navigator.clipboard.writeText(document.getElementById('chatgpt').value)">Copiar</button><h2>Instalar no Claude</h2><p>Copie este endereço e use ao adicionar O Guardião como conector:</p><input id="claude" value="${claudeAddress}" readonly size="90"><button onclick="navigator.clipboard.writeText(document.getElementById('claude').value)">Copiar</button><p>Depois de conectar, pergunte: <strong>O que O Guardião encontrou?</strong></p>`,
       "text/html; charset=utf-8"
     );
   } catch (error) {
@@ -1042,7 +1043,15 @@ const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
 
   if (url.pathname === "/mcp") {
-    agmMcpNodeHandler(req, res).catch((error) => {
+    const context = connectorContext(url);
+    if (context === false) {
+      return send(res, 401, "Conexão do O Guardião inválida.");
+    }
+    const handler = createAgmMcpNodeHandler({
+      ...(context || {}),
+      auditApi
+    });
+    handler(req, res).catch((error) => {
       console.error(JSON.stringify({ event: "mcp_error", message: error.message }));
       if (!res.headersSent) send(res, 500, "mcp error");
     });
@@ -1123,6 +1132,29 @@ const server = http.createServer((req, res) => {
   });
 });
 
+let lastSchedulerDate = null;
+
+async function schedulerTick() {
+  const now = new Date();
+  const date = brazilDate(now);
+  const hour = Number(new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Sao_Paulo",
+    hour: "2-digit",
+    hour12: false
+  }).format(now));
+  if (hour < 5 || lastSchedulerDate === date) return;
+  lastSchedulerDate = date;
+  try {
+    const results = await runAllDailyAudits();
+    console.log(JSON.stringify({ event: "daily_scheduler_completed", date, results }));
+  } catch (error) {
+    lastSchedulerDate = null;
+    console.error(JSON.stringify({ event: "daily_scheduler_error", date, message: error.message }));
+  }
+}
+
 server.listen(PORT, "0.0.0.0", () => {
   console.log(JSON.stringify({ event: "server_started", port: PORT, configured: configured() }));
+  setTimeout(() => schedulerTick(), 5000).unref();
+  setInterval(() => schedulerTick(), 60 * 1000).unref();
 });
