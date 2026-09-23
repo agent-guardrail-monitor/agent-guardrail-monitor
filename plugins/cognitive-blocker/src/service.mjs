@@ -150,6 +150,7 @@ export async function evaluateForAccount(accountId, payload) {
     })),
     recovery: {
       recoverySessionId: persistedRecovery?.id || null,
+      replayed: recoveryAttempt.replayed,
       ...recoveryPlan
     }
   };
