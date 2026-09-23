@@ -92,6 +92,7 @@ maybeTest("Testcontainers: real PostgreSQL enforces cross-tenant RLS", { timeout
         assert.equal(visibleToA.rows[0].account_id, accountA);
         assert.equal(visibleToA.rows[0].name, "tenant-a-project");
 
+        await clientA.query("SAVEPOINT project_cross_tenant");
         await assert.rejects(
           clientA.query(
             "INSERT INTO cognitive_projects(id, account_id, name) VALUES ($1,$2,'illegal-cross-tenant')",
@@ -99,6 +100,7 @@ maybeTest("Testcontainers: real PostgreSQL enforces cross-tenant RLS", { timeout
           ),
           /row-level security|policy/i
         );
+        await clientA.query("ROLLBACK TO SAVEPOINT project_cross_tenant");
 
         await clientA.query(
           `INSERT INTO cognitive_recovery_sessions
@@ -115,6 +117,7 @@ maybeTest("Testcontainers: real PostgreSQL enforces cross-tenant RLS", { timeout
         assert.equal(recoveryVisibleToA.rows[0].id, recoveryA);
         assert.equal(recoveryVisibleToA.rows[0].account_id, accountA);
 
+        await clientA.query("SAVEPOINT recovery_cross_tenant");
         await assert.rejects(
           clientA.query(
             `INSERT INTO cognitive_recovery_sessions
@@ -125,6 +128,7 @@ maybeTest("Testcontainers: real PostgreSQL enforces cross-tenant RLS", { timeout
           ),
           /row-level security|policy/i
         );
+        await clientA.query("ROLLBACK TO SAVEPOINT recovery_cross_tenant");
 
         await clientA.query("ROLLBACK");
       } finally {
