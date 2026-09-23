@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import { agmMcpNodeHandler } from "./chatgpt-mcp.mjs";
 import { PRODUCT_VERSION } from "../src/core.mjs";
+import { summarizeMarketplacePurchase } from "../src/marketplace.mjs";
 
 const PORT = Number(process.env.PORT || 3000);
 const APP_ID = String(process.env.GITHUB_APP_ID || "").trim();
@@ -221,6 +222,11 @@ function verifySignature(rawBody, signature) {
 }
 
 async function handleWebhook(event, payload) {
+  if (event === "marketplace_purchase") {
+    console.log(JSON.stringify(summarizeMarketplacePurchase(payload)));
+    return;
+  }
+
   const installationId = payload.installation?.id;
   const repo = payload.repository;
   if (!installationId || !repo) return;
@@ -268,6 +274,10 @@ const server = http.createServer((req, res) => {
     return send(res, 200, JSON.stringify({ ok: true, configured: configured(), version: PRODUCT_VERSION, mcp: true, commit: DEPLOY_SHA }), "application/json");
   }
 
+  if (req.method === "GET" && url.pathname === "/setup") {
+    return send(res, 200, `<!doctype html><meta charset="utf-8"><title>Setup - Agent Guardrail Monitor</title><h1>Agent Guardrail Monitor setup</h1><p>Your GitHub App installation can now be completed or managed from GitHub. Agent Guardrail Monitor will publish verification checks for repositories where the App is installed and the required permissions are available.</p><p><a href="https://github.com/apps/agent-guardrail-monitor">Open the GitHub App</a> &middot; <a href="${REPO_URL}">Documentation</a> &middot; <a href="/support">Support</a></p>`, "text/html; charset=utf-8");
+  }
+
   if (req.method === "GET" && url.pathname === "/privacy") {
     return send(res, 200, `<!doctype html><meta charset="utf-8"><title>Privacy - Agent Guardrail Monitor</title><h1>Privacy</h1><p>Agent Guardrail Monitor transiently processes guardrail configuration and MCP decision inputs required to evaluate policy, skills, tools, and evidence. The application code does not persist MCP evaluation payloads and does not sell user data. Hosting infrastructure may retain ordinary operational request metadata.</p><p><a href="${REPO_URL}">Project repository</a></p>`, "text/html; charset=utf-8");
   }
@@ -276,12 +286,16 @@ const server = http.createServer((req, res) => {
     return send(res, 200, `<!doctype html><meta charset="utf-8"><title>Support - Agent Guardrail Monitor</title><h1>Support</h1><p>Open an issue in the public GitHub repository for support, bug reports, and feature requests.</p><p><a href="${REPO_URL}/issues">GitHub Issues</a></p>`, "text/html; charset=utf-8");
   }
 
+  if (req.method === "GET" && url.pathname === "/eula") {
+    return send(res, 200, `<!doctype html><meta charset="utf-8"><title>EULA - Agent Guardrail Monitor</title><h1>End User License Agreement</h1><p>Use of Agent Guardrail Monitor is governed by the product EULA and the open-source license applicable to repository components.</p><p><a href="${REPO_URL}/blob/main/docs/EULA.md">Read the complete EULA</a> &middot; <a href="/support">Support</a></p>`, "text/html; charset=utf-8");
+  }
+
   if (req.method === "GET" && url.pathname === "/terms") {
     return send(res, 200, `<!doctype html><meta charset="utf-8"><title>Terms - Agent Guardrail Monitor</title><h1>Terms</h1><p>Agent Guardrail Monitor is provided as pre-release software for guardrail verification and policy decisions. Users remain responsible for validating enforcement boundaries, runtime permissions, and deployment configuration.</p><p><a href="${REPO_URL}">Project repository and license</a></p>`, "text/html; charset=utf-8");
   }
 
   if (req.method === "GET" && url.pathname === "/") {
-    return send(res, 200, `<!doctype html><meta charset="utf-8"><title>Agent Guardrail Monitor</title><h1>Agent Guardrail Monitor</h1><p>Deterministic guardrail verification and decision gates for AI agents.</p><p><a href="https://github.com/apps/agent-guardrail-monitor">Install GitHub App</a> &middot; <a href="${REPO_URL}">Repository</a> &middot; <a href="/privacy">Privacy</a> &middot; <a href="/terms">Terms</a> &middot; <a href="/support">Support</a></p>`, "text/html; charset=utf-8");
+    return send(res, 200, `<!doctype html><meta charset="utf-8"><title>Agent Guardrail Monitor</title><h1>Agent Guardrail Monitor</h1><p>Deterministic guardrail verification and decision gates for AI agents.</p><p><a href="https://github.com/apps/agent-guardrail-monitor">Install GitHub App</a> &middot; <a href="${REPO_URL}">Repository</a> &middot; <a href="/setup">Setup</a> &middot; <a href="/privacy">Privacy</a> &middot; <a href="/terms">Terms</a> &middot; <a href="/eula">EULA</a> &middot; <a href="/support">Support</a></p>`, "text/html; charset=utf-8");
   }
 
   if (req.method !== "POST" || url.pathname !== "/webhook") {
