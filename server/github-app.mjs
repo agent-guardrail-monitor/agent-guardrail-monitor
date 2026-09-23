@@ -355,6 +355,8 @@ async function attemptAutomatedRepair({
     owner,
     repo,
     defaultBranch,
+    repairBaseSha: afterSha,
+    baselineRef: beforeSha,
     objective: "Restore the guardrail controls that regressed on the default branch and verify the repair.",
     failureEvidence: regression.failureEvidence,
     repoClient,
