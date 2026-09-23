@@ -88,7 +88,7 @@ Usage:
   agm snapshot [--cwd DIR] [--out FILE] [--prove] [--live]
   agm baseline [--cwd DIR] [--out FILE] [--prove] [--live]
   agm diff BASELINE CURRENT [--json]
-  agm gate --baseline FILE [--cwd DIR] [--prove] [--live] [--json] [--repair-handoff FILE]
+  agm gate --baseline FILE [--cwd DIR] [--prove] [--live] [--json] [--repair-request FILE]
   agm policy validate|compile|check ...
   agm hook --runtime RUNTIME --policy POLICY.json
   agm install-hook --runtime claude|copilot|codex [--cwd DIR] [--policy POLICY.json]
