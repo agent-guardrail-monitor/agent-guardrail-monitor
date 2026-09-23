@@ -34,7 +34,10 @@ for (const [check, ruleId] of directChecks) {
   test(`direct check ${check} maps to ${ruleId}`, () => {
     const result = evaluateGuard({ checks: { [check]: true } });
     assert.equal(result.decision, "BLOCK");
-    assert.ok(result.violations.some((v) => v.ruleId === ruleId));
+    const violation = result.violations.find((v) => v.ruleId === ruleId);
+    assert.ok(violation);
+    assert.equal(violation.source, "deterministic");
+    assert.equal(violation.evidence, check);
   });
 }
 
@@ -101,4 +104,83 @@ test("code correction with possible test requires passing proof", () => {
   });
   assert.ok(result.violations.some((v) => v.ruleId === "COD-005"));
   assert.ok(result.violations.some((v) => v.ruleId === "COD-007"));
+});
+
+test("duplicate equivalent violations are deduplicated", () => {
+  const result = evaluateGuard({
+    task: { authorizedResources: ["auth"] },
+    proposedActions: [
+      { resource: "header", destructive: false },
+      { resource: "header", destructive: false }
+    ]
+  });
+
+  const scopeViolations = result.violations.filter(
+    (v) => v.ruleId === "EXE-001" && v.evidence === "resource_outside_authorized_scope:header"
+  );
+  assert.equal(scopeViolations.length, 1);
+});
+
+test("destructive authorization is exact", () => {
+  const blocked = evaluateGuard({
+    proposedActions: [{ resource: "db", destructive: true, destructiveAuthorized: false }]
+  });
+  assert.ok(blocked.violations.some((v) => v.ruleId === "EXE-008"));
+
+  const allowed = evaluateGuard({
+    proposedActions: [{ resource: "db", destructive: true, destructiveAuthorized: true }]
+  });
+  assert.equal(allowed.decision, "ALLOW");
+});
+
+test("non-array scopes safely default to no explicit scope", () => {
+  const result = evaluateGuard({
+    task: { authorizedResources: "auth", frozenElements: "header" },
+    proposedActions: [{ resource: "header", destructive: false }]
+  });
+  assert.equal(result.decision, "ALLOW");
+});
+
+test("semantic threshold and source are exact", () => {
+  const low = evaluateGuard({
+    semanticSignals: [{ ruleId: "RES-001", confidence: 0.7999, evidence: "evidence" }]
+  });
+  assert.equal(low.decision, "ALLOW");
+  assert.equal(low.ignoredSignals[0].reason, "insufficient_evidence");
+
+  const exact = evaluateGuard({
+    semanticSignals: [{ ruleId: "RES-001", confidence: 0.8, evidence: " evidence " }]
+  });
+  const violation = exact.violations.find((v) => v.ruleId === "RES-001");
+  assert.ok(violation);
+  assert.equal(violation.source, "semantic_signal");
+  assert.equal(violation.evidence, "evidence");
+});
+
+test("blank semantic evidence is ignored", () => {
+  const result = evaluateGuard({
+    semanticSignals: [{ ruleId: "RES-001", confidence: 1, evidence: "   " }]
+  });
+  assert.equal(result.decision, "ALLOW");
+  assert.equal(result.ignoredSignals[0].reason, "insufficient_evidence");
+});
+
+test("semantic duplicate evidence is emitted once", () => {
+  const result = evaluateGuard({
+    semanticSignals: [
+      { ruleId: "RES-001", confidence: 1, evidence: "same" },
+      { ruleId: "RES-001", confidence: 1, evidence: "same" }
+    ]
+  });
+  assert.equal(result.violations.filter((v) => v.ruleId === "RES-001").length, 1);
+});
+
+test("result envelope reports exact counts and ruleset identity", () => {
+  const result = evaluateGuard({ checks: { autoFlattery: true, uncriticalValidation: true } });
+  assert.equal(result.decision, "BLOCK");
+  assert.equal(result.violationCount, 2);
+  assert.equal(typeof result.rulesetVersion, "string");
+  assert.ok(result.rulesetVersion.length > 0);
+  assert.equal(result.violations.length, 2);
+  assert.deepEqual(result.ignoredSignals, []);
 });
