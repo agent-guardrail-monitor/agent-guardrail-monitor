@@ -12,13 +12,17 @@ function blockedPath(path, allowWorkflowChanges = false) {
   return false;
 }
 
-export function validateRepairPlan(plan, { allowWorkflowChanges = false } = {}) {
+export function validateRepairPlan(plan, { allowWorkflowChanges = false, allowedPaths = null } = {}) {
   const errors = [];
   if (!plan || typeof plan !== "object") return { valid: false, errors: ["repair_plan_required"] };
 
   const rootCause = String(plan.rootCause || "").trim();
   if (!rootCause) errors.push("root_cause_required");
 
+  const rootCauseEvidence = Array.isArray(plan.rootCauseEvidence) ? plan.rootCauseEvidence.filter(Boolean) : [];
+  if (!rootCauseEvidence.length) errors.push("root_cause_evidence_required");
+
+  const allowed = allowedPaths ? new Set([...allowedPaths].map(cleanPath)) : null;
   const files = Array.isArray(plan.files) ? plan.files : [];
   if (!files.length) errors.push("at_least_one_file_change_required");
   if (files.length > MAX_FILES) errors.push("too_many_file_changes");
@@ -29,6 +33,7 @@ export function validateRepairPlan(plan, { allowWorkflowChanges = false } = {}) 
     const content = typeof item?.content === "string" ? item.content : null;
     if (!path) errors.push(`file_${index}_path_required`);
     if (blockedPath(path, allowWorkflowChanges)) errors.push(`file_${index}_path_blocked`);
+    if (allowed && !allowed.has(path)) errors.push(`file_${index}_path_outside_repair_scope`);
     if (seen.has(path)) errors.push(`file_${index}_duplicate_path`);
     seen.add(path);
     if (content === null) errors.push(`file_${index}_content_required`);
@@ -44,7 +49,7 @@ export function validateRepairPlan(plan, { allowWorkflowChanges = false } = {}) 
     normalized: {
       summary: String(plan.summary || "").trim(),
       rootCause,
-      rootCauseEvidence: Array.isArray(plan.rootCauseEvidence) ? plan.rootCauseEvidence.map(String) : [],
+      rootCauseEvidence: rootCauseEvidence.map(String),
       files: files.map((item) => ({
         path: cleanPath(item.path),
         content: String(item.content ?? ""),
@@ -74,6 +79,7 @@ export const REPAIR_PLAN_SCHEMA = {
     rootCause: { type: "string", minLength: 1, maxLength: 5000 },
     rootCauseEvidence: {
       type: "array",
+      minItems: 1,
       maxItems: 20,
       items: { type: "string", minLength: 1, maxLength: 3000 }
     },
