@@ -18,6 +18,7 @@ const PRIVATE_KEY_B64 = String(process.env.GITHUB_PRIVATE_KEY_BASE64 || "").trim
 const PRIVATE_KEY_PATH = String(process.env.GITHUB_PRIVATE_KEY_PATH || "/etc/secrets/github-app.pem");
 const WEBHOOK_SECRET_PATH = String(process.env.GITHUB_WEBHOOK_SECRET_PATH || "/etc/secrets/webhook-secret.txt");
 const REPO_URL = "https://github.com/agent-guardrail-monitor/agent-guardrail-monitor";
+const PUBLIC_NAME = "O Guardião - W";
 const DEPLOY_SHA = String(process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || "").trim() || null;
 const OAUTH_CLIENT_ID = String(process.env.GITHUB_CLIENT_ID || "Iv23lilPmMCpZGickCZN").trim();
 const OAUTH_CLIENT_SECRET = String(process.env.GITHUB_CLIENT_SECRET || "").trim();
@@ -146,9 +147,9 @@ async function verifyUserInstallation(token, installationId) {
 function beginMarketplaceOAuth(res, url) {
   const installationId = url.searchParams.get("installation_id");
   if (!installationId) {
-    return send(res, 200, `<!doctype html><meta charset="utf-8"><title>Setup - Agent Guardrail Monitor</title><h1>Agent Guardrail Monitor setup</h1><p>Install or manage Agent Guardrail Monitor from GitHub. Marketplace installations return here with a verified installation identifier and continue through GitHub authorization.</p><p><a href="https://github.com/apps/agent-guardrail-monitor">Open the GitHub App</a> &middot; <a href="${REPO_URL}">Documentation</a> &middot; <a href="/support">Support</a></p>`, "text/html; charset=utf-8");
+    return send(res, 200, `<!doctype html><meta charset="utf-8"><title>Conectar - ${PUBLIC_NAME}</title><h1>${PUBLIC_NAME}</h1><p>Conecte o Guardião ao seu GitHub para acompanhar as travas de segurança dos robôs de IA.</p><p><a href="https://github.com/apps/agent-guardrail-monitor">Conectar ao GitHub</a> &middot; <a href="/support">Ajuda</a></p>`, "text/html; charset=utf-8");
   }
-  if (!oauthConfigured()) return send(res, 503, "GitHub OAuth is not configured");
+  if (!oauthConfigured()) return send(res, 503, "A conexão com o GitHub ainda não está pronta.");
 
   let tx;
   try {
@@ -174,7 +175,7 @@ async function completeMarketplaceOAuth(req, res, url) {
   const error = url.searchParams.get("error");
   if (error) {
     res.setHeader("set-cookie", oauthCookie("", 0));
-    return send(res, 400, `GitHub authorization was not completed: ${error}`);
+    return send(res, 400, "A conexão com o GitHub não foi concluída.");
   }
 
   const code = String(url.searchParams.get("code") || "");
@@ -198,7 +199,7 @@ async function completeMarketplaceOAuth(req, res, url) {
   }));
 
   res.setHeader("set-cookie", oauthCookie("", 0));
-  return send(res, 200, `<!doctype html><meta charset="utf-8"><title>Authorized - Agent Guardrail Monitor</title><h1>Agent Guardrail Monitor is connected</h1><p>GitHub authorization and installation ownership were verified. No user access token is retained by this flow.</p><p><a href="${REPO_URL}">Documentation</a> &middot; <a href="/support">Support</a></p>`, "text/html; charset=utf-8");
+  return send(res, 200, `<!doctype html><meta charset="utf-8"><title>Conectado - ${PUBLIC_NAME}</title><h1>${PUBLIC_NAME} está conectado</h1><p>A conexão com o GitHub foi confirmada.</p><p><a href="${REPO_URL}">Ver projeto</a> &middot; <a href="/support">Ajuda</a></p>`, "text/html; charset=utf-8");
 }
 
 async function installationToken(installationId) {
@@ -378,30 +379,68 @@ async function attemptAutomatedRepair({
   return result;
 }
 
+function publicState(state) {
+  if (state === "PASS") return "APROVADO";
+  if (state === "FAIL") return "FALHA";
+  return "DESCONHECIDO";
+}
+
+function publicMessage(message) {
+  const value = String(message || "");
+  if (value === "Hooks are declared but disableAllHooks is true.") {
+    return "A trava de segurança existe, mas está desligada.";
+  }
+  if (value === "Copilot hook files require version: 1.") {
+    return "A configuração do Copilot está fora do padrão esperado.";
+  }
+  if (/^Invalid JSON:/i.test(value)) {
+    return "A configuração está inválida.";
+  }
+  if (/trust and approval cannot be proven/i.test(value)) {
+    return "Não foi possível confirmar se esse gatilho automático está ativo.";
+  }
+  return value
+    .replaceAll("Hooks", "Travas de segurança")
+    .replaceAll("hooks", "travas de segurança");
+}
+
 function markdown(scan) {
+  const state = publicState(scan.state);
   const lines = [
-    `**Guardrail status: ${scan.state}**`,
+    `**Travas de segurança: ${state}**`,
     "",
-    "| Runtime | File | Hook events |",
+    "| IA | Onde está a trava | Gatilhos automáticos |",
     "| --- | --- | --- |"
   ];
+
   if (!scan.results.length) {
-    lines.push("| n/a | n/a | No supported guardrail configuration found |");
+    lines.push("| — | — | Nenhuma trava de segurança compatível foi encontrada |");
   } else {
     for (const item of scan.results) {
-      lines.push(`| ${item.runtime} | \`${item.filePath}\` | ${item.events.length ? item.events.join(", ") : "none detected"} |`);
+      lines.push(
+        `| ${item.runtime} | \`${item.filePath}\` | ${item.events.length ? item.events.join(", ") : "nenhum identificado"} |`
+      );
     }
   }
+
   if (scan.fails.length) {
-    lines.push("", "### Failures");
-    for (const item of scan.fails) lines.push(`- **${item.runtime}** \`${item.filePath}\`: ${item.message}`);
+    lines.push("", "### FALHA");
+    for (const item of scan.fails) {
+      lines.push(`- **${item.runtime}**: ${publicMessage(item.message)}`);
+    }
   }
+
   if (scan.unknowns.length || !scan.results.length) {
-    lines.push("", "### Unknown");
-    if (!scan.results.length) lines.push("- No supported guardrail configuration was found in the repository.");
-    for (const item of scan.unknowns) lines.push(`- **${item.runtime}** \`${item.filePath}\`: ${item.message}`);
+    lines.push("", "### DESCONHECIDO");
+    if (!scan.results.length) {
+      lines.push("- Não foi possível encontrar uma trava de segurança compatível para confirmar.");
+    }
+    for (const item of scan.unknowns) {
+      lines.push(`- **${item.runtime}**: ${publicMessage(item.message)}`);
+    }
   }
-  lines.push("", "[Agent Guardrail Monitor repository](" + REPO_URL + ")");
+
+  lines.push("", `[${PUBLIC_NAME}](${REPO_URL})`);
   return lines.join("\n").slice(0, 65000);
 }
 
@@ -413,13 +452,13 @@ async function publishCheck({ owner, repo, sha, installationId }) {
     token,
     method: "POST",
     body: {
-      name: "Agent Guardrail Monitor",
+      name: PUBLIC_NAME,
       head_sha: sha,
       status: "completed",
       conclusion,
       details_url: REPO_URL,
       output: {
-        title: `Guardrail status: ${scan.state}`,
+        title: `Travas de segurança: ${publicState(scan.state)}`,
         summary: markdown(scan)
       }
     }
@@ -522,29 +561,29 @@ const server = http.createServer((req, res) => {
     completeMarketplaceOAuth(req, res, url).catch((error) => {
       console.error(JSON.stringify({ event: "oauth_error", message: error.message }));
       if (!res.headersSent) res.setHeader("set-cookie", oauthCookie("", 0));
-      if (!res.writableEnded) send(res, 400, "GitHub authorization could not be verified");
+      if (!res.writableEnded) send(res, 400, "Não foi possível confirmar a conexão com o GitHub.");
     });
     return;
   }
 
   if (req.method === "GET" && url.pathname === "/privacy") {
-    return send(res, 200, `<!doctype html><meta charset="utf-8"><title>Privacy - Agent Guardrail Monitor</title><h1>Privacy</h1><p>Agent Guardrail Monitor processes guardrail configuration, before/after regression evidence, MCP decision inputs, and bounded repository context needed for configured repair. Automated repair uses deterministic baseline restoration first. Only when deterministic repair cannot establish a bounded plan and an optional OpenAI API fallback is configured may relevant repository context be sent to that model with <code>store: false</code>. Repair changes are stored by GitHub as ordinary branches, commits, and pull requests. The application does not sell user data.</p><p><a href="${REPO_URL}/blob/main/docs/PRIVACY.md">Complete Privacy Policy</a></p>`, "text/html; charset=utf-8");
+    return send(res, 200, `<!doctype html><meta charset="utf-8"><title>Privacidade - ${PUBLIC_NAME}</title><h1>Privacidade</h1><p>O Guardião lê apenas o que precisa para verificar as travas de segurança e fazer um conserto quando você habilita essa função.</p><p>O conserto usa primeiro o último estado aprovado. Um serviço externo de IA só entra como apoio opcional quando esse caminho não é suficiente.</p><p>Seus dados não são vendidos.</p><p><a href="${REPO_URL}/blob/main/docs/PRIVACY.md">Política completa</a></p>`, "text/html; charset=utf-8");
   }
 
   if (req.method === "GET" && url.pathname === "/support") {
-    return send(res, 200, `<!doctype html><meta charset="utf-8"><title>Support - Agent Guardrail Monitor</title><h1>Support</h1><p>Open an issue in the public GitHub repository for support, bug reports, and feature requests.</p><p><a href="${REPO_URL}/issues">GitHub Issues</a></p>`, "text/html; charset=utf-8");
+    return send(res, 200, `<!doctype html><meta charset="utf-8"><title>Ajuda - ${PUBLIC_NAME}</title><h1>Ajuda</h1><p>Encontrou um problema ou precisa de ajuda? Fale com a gente pelo GitHub.</p><p><a href="${REPO_URL}/issues">Abrir atendimento</a></p>`, "text/html; charset=utf-8");
   }
 
   if (req.method === "GET" && url.pathname === "/eula") {
-    return send(res, 200, `<!doctype html><meta charset="utf-8"><title>EULA - Agent Guardrail Monitor</title><h1>End User License Agreement</h1><p>Use of Agent Guardrail Monitor is governed by the product EULA and the open-source license applicable to repository components.</p><p><a href="${REPO_URL}/blob/main/docs/EULA.md">Read the complete EULA</a> &middot; <a href="/support">Support</a></p>`, "text/html; charset=utf-8");
+    return send(res, 200, `<!doctype html><meta charset="utf-8"><title>Contrato - ${PUBLIC_NAME}</title><h1>Contrato de uso</h1><p>O Guardião acompanha e, quando autorizado, conserta travas de segurança dentro do alcance descrito para esta versão.</p><p><a href="${REPO_URL}/blob/main/docs/EULA.md">Ler contrato completo</a> &middot; <a href="/support">Ajuda</a></p>`, "text/html; charset=utf-8");
   }
 
   if (req.method === "GET" && url.pathname === "/terms") {
-    return send(res, 200, `<!doctype html><meta charset="utf-8"><title>Terms - Agent Guardrail Monitor</title><h1>Terms</h1><p>Agent Guardrail Monitor is pre-release software for guardrail verification and integrated repair. Repair defaults to a dedicated pull request. Automatic merge occurs only when explicitly configured and when verification gates allow it. Users remain responsible for repository permissions, branch protection, deployment boundaries, and production governance.</p><p><a href="${REPO_URL}/blob/main/docs/EULA.md">EULA</a> &middot; <a href="${REPO_URL}">Project repository</a></p>`, "text/html; charset=utf-8");
+    return send(res, 200, `<!doctype html><meta charset="utf-8"><title>Termos - ${PUBLIC_NAME}</title><h1>Termos</h1><p>O Guardião acompanha as travas de segurança dos robôs de IA. Por padrão, todo conserto fica separado para revisão. O modo totalmente automático só funciona quando você escolhe essa opção.</p><p><a href="${REPO_URL}/blob/main/docs/EULA.md">Contrato de uso</a> &middot; <a href="/support">Ajuda</a></p>`, "text/html; charset=utf-8");
   }
 
   if (req.method === "GET" && url.pathname === "/") {
-    return send(res, 200, `<!doctype html><meta charset="utf-8"><title>Agent Guardrail Monitor</title><h1>Agent Guardrail Monitor</h1><p>Detect, prove, and repair AI coding-agent guardrail regressions.</p><p>Default repair behavior creates a verified repair branch and pull request; auto-merge is explicit opt-in.</p><p><a href="https://github.com/apps/agent-guardrail-monitor">Install GitHub App</a> &middot; <a href="${REPO_URL}">Repository</a> &middot; <a href="/setup">Setup</a> &middot; <a href="/privacy">Privacy</a> &middot; <a href="/terms">Terms</a> &middot; <a href="/eula">EULA</a> &middot; <a href="/support">Support</a></p>`, "text/html; charset=utf-8");
+    return send(res, 200, `<!doctype html><meta charset="utf-8"><title>${PUBLIC_NAME}</title><h1>${PUBLIC_NAME}</h1><h2>Sua IA trabalha. O Guardião confere se ela continua respeitando as regras.</h2><p>Feito para empresas que usam Claude Code, OpenAI Codex ou GitHub Copilot.</p><p>Quando um robô faz o que não podia, o Guardião identifica a falha, guarda a prova e prepara o conserto.</p><p><strong>acha → prova → conserta → testa → fecha</strong></p><p><strong>APROVADO</strong>: a trava de segurança está funcionando.<br><strong>FALHA</strong>: o robô fez o que não podia ou uma trava deixou de funcionar.<br><strong>DESCONHECIDO</strong>: ainda falta prova para confirmar.</p><p>Por padrão, todo conserto fica separado para sua equipe revisar. O modo totalmente automático só é ativado quando você escolher.</p><p><a href="https://github.com/apps/agent-guardrail-monitor">Conectar ao GitHub</a> &middot; <a href="/privacy">Privacidade</a> &middot; <a href="/terms">Termos</a> &middot; <a href="/support">Ajuda</a></p>`, "text/html; charset=utf-8");
   }
 
   if (req.method !== "POST" || url.pathname !== "/webhook") {
