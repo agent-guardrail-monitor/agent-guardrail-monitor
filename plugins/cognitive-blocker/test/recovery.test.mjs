@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   buildRecoveryPlan,
+  resolveRecoveryAttempt,
   RECOVERY_MAX_ATTEMPTS,
   RECOVERY_PHASES
 } from "../src/recovery.mjs";
@@ -97,4 +98,81 @@ test("duplicate invalid resources are deduplicated", () => {
   );
   assert.deepEqual(plan.invalidResources, ["header"]);
   assert.deepEqual(plan.preserve.resources, ["auth"]);
+});
+
+
+test("identical recovery candidate is a replay and does not consume an attempt", () => {
+  const result = resolveRecoveryAttempt({
+    id: "11111111-1111-1111-1111-111111111111",
+    project_id: null,
+    phase: "CORRECT",
+    attempt: 2,
+    last_request_fingerprint: "same",
+    closed_at: null
+  }, "same", null);
+
+  assert.deepEqual(result, { attempt: 2, replayed: true });
+});
+
+test("corrected recovery candidate advances exactly one attempt", () => {
+  const result = resolveRecoveryAttempt({
+    id: "11111111-1111-1111-1111-111111111111",
+    project_id: "22222222-2222-2222-2222-222222222222",
+    phase: "CORRECT",
+    attempt: 1,
+    last_request_fingerprint: "old",
+    closed_at: null
+  }, "new", "22222222-2222-2222-2222-222222222222");
+
+  assert.deepEqual(result, { attempt: 2, replayed: false });
+});
+
+test("recovery attempt progression is capped at three", () => {
+  const result = resolveRecoveryAttempt({
+    id: "11111111-1111-1111-1111-111111111111",
+    project_id: null,
+    phase: "CORRECT",
+    attempt: 3,
+    last_request_fingerprint: "old",
+    closed_at: null
+  }, "new", null);
+
+  assert.deepEqual(result, { attempt: 3, replayed: false });
+});
+
+test("closed recovery sessions cannot be reused", () => {
+  assert.throws(
+    () => resolveRecoveryAttempt({
+      id: "11111111-1111-1111-1111-111111111111",
+      project_id: null,
+      phase: "ALLOW",
+      attempt: 2,
+      last_request_fingerprint: "old",
+      closed_at: "2026-09-23T00:00:00Z"
+    }, "new", null),
+    (error) => {
+      assert.equal(error.code, "RECOVERY_SESSION_CLOSED");
+      assert.equal(error.phase, "ALLOW");
+      return true;
+    }
+  );
+});
+
+test("recovery session cannot cross project boundaries", () => {
+  assert.throws(
+    () => resolveRecoveryAttempt({
+      id: "11111111-1111-1111-1111-111111111111",
+      project_id: "22222222-2222-2222-2222-222222222222",
+      phase: "CORRECT",
+      attempt: 1,
+      last_request_fingerprint: "old",
+      closed_at: null
+    }, "new", "33333333-3333-3333-3333-333333333333"),
+    (error) => {
+      assert.equal(error.code, "RECOVERY_PROJECT_MISMATCH");
+      assert.equal(error.sessionProject, "22222222-2222-2222-2222-222222222222");
+      assert.equal(error.candidateProject, "33333333-3333-3333-3333-333333333333");
+      return true;
+    }
+  );
 });
