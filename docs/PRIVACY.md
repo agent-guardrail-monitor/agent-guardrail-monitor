@@ -2,11 +2,27 @@
 
 Effective date: September 23, 2026
 
-Agent Guardrail Monitor processes only the information required to provide guardrail verification, GitHub checks, webhook handling, and MCP decision services.
+Agent Guardrail Monitor processes information required to provide guardrail verification, GitHub checks, automated repair, webhook handling, Marketplace setup, and MCP decision services.
 
 ## GitHub App data
 
-The GitHub App currently requests Contents read, Metadata read, and Checks read/write permissions. Repository content is read only to inspect supported guardrail configuration and generate verification results. The application code does not persist repository file contents as a customer database.
+The integrated GitHub App requires Metadata read, Contents read/write, Checks read/write, and Pull requests read/write permissions.
+
+Repository content is read to inspect supported guardrail configuration, compare the pre-regression and broken states, produce verification results, and, when repair is enabled, create a bounded repair branch and pull request.
+
+The hosted application does not maintain repository file contents as a customer document database. Repository changes created by the repair engine are stored by GitHub as ordinary commits and pull requests.
+
+## Automated repair model processing
+
+When a repairable regression is detected and repair is enabled, Agent Guardrail Monitor sends a bounded subset of relevant repository context to the configured OpenAI API model so it can produce a structured repair plan.
+
+The repair request includes relevant failure evidence plus selected before/after repository files needed to diagnose the regression. It does not intentionally send the entire repository.
+
+The OpenAI Responses API request is made with `store: false`. OpenAI infrastructure and account-level data controls remain governed by the OpenAI API terms and the data controls configured for the service account.
+
+## Repair behavior
+
+The default repair mode creates a dedicated `agm/repair/...` branch and pull request. Automatic merge occurs only when the repository explicitly selects `auto_merge` and the repair satisfies the configured verification gates.
 
 ## Marketplace data
 
@@ -14,11 +30,13 @@ When GitHub Marketplace sends a `marketplace_purchase` webhook, Agent Guardrail 
 
 ## GitHub OAuth
 
-For Marketplace installation setup, Agent Guardrail Monitor uses GitHub's OAuth web application flow to verify the GitHub user and confirm that the supplied installation ID is actually accessible to that authorized user. OAuth state is signed, PKCE is used, and the user access token is used only during the callback verification request. The application does not retain that user access token after the request completes.
+For Marketplace installation setup, Agent Guardrail Monitor uses GitHub's OAuth web application flow to verify the GitHub user and confirm that the supplied installation ID is accessible to that authorized user.
+
+OAuth state is signed, PKCE is used, and the user access token is used only during the callback verification request. The application does not retain that user access token after the request completes.
 
 ## MCP data
 
-The hosted MCP endpoint transiently processes the inputs required to evaluate policy, skills, tools, evidence, and repair handoff decisions. The application code does not persist MCP evaluation payloads.
+The hosted MCP endpoint transiently processes the inputs required to evaluate policy, skills, tools, evidence, integrated repair state, and final verification decisions. The application code does not persist MCP evaluation payloads as customer records.
 
 ## Operational metadata
 
