@@ -1,5 +1,6 @@
 import { evaluateGuard } from "./engine.mjs";
-import { appendGuardEvent, listMemory } from "./db.mjs";
+import { appendGuardEvent, listFeatureFlags, listMemory } from "./db.mjs";
+import { isFeatureEnabled, resolveFeatures } from "./feature-catalog.mjs";
 
 function unique(values) {
   return [...new Set(values.filter(Boolean))];
@@ -49,23 +50,34 @@ export function applyMemoryContext(payload, memoryItems) {
 }
 
 export async function evaluateForAccount(accountId, payload) {
+  const featureOverrides = await listFeatureFlags(accountId);
+  const features = resolveFeatures(featureOverrides);
+
   const accountMemory = await listMemory(accountId, null);
   const projectMemory = payload.projectId
     ? await listMemory(accountId, payload.projectId)
     : [];
   const memoryItems = [...accountMemory, ...projectMemory];
   const enrichedPayload = applyMemoryContext(payload, memoryItems);
-  const result = evaluateGuard(enrichedPayload);
 
-  await appendGuardEvent(accountId, {
-    result,
-    projectId: payload.projectId || null,
-    taskContractId: payload.taskContractId || null,
-    requestFingerprint: payload.requestFingerprint || null
-  });
+  const effectivePayload = isFeatureEnabled("semantic_signals", featureOverrides)
+    ? enrichedPayload
+    : { ...enrichedPayload, semanticSignals: [] };
+
+  const result = evaluateGuard(effectivePayload);
+
+  if (isFeatureEnabled("guard_event_history", featureOverrides)) {
+    await appendGuardEvent(accountId, {
+      result,
+      projectId: payload.projectId || null,
+      taskContractId: payload.taskContractId || null,
+      requestFingerprint: payload.requestFingerprint || null
+    });
+  }
 
   return {
     ...result,
+    features,
     memoryApplied: memoryItems.map((item) => ({
       key: item.memory_key,
       type: item.memory_type,
