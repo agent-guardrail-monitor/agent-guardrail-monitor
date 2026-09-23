@@ -70,3 +70,62 @@ sequenceDiagram
 ## Boundary rule
 
 The model never decides whether its own bypass is acceptable. The deterministic plugin control path makes that decision using canonical rules, tenant state and evidence.
+
+## Class map
+
+```mermaid
+classDiagram
+  class CognitiveAccount {
+    +uuid id
+    +string platform
+    +string external_account_ref
+  }
+
+  class CognitiveInstance {
+    +uuid id
+    +uuid account_id
+    +string role
+    +string token_hash
+  }
+
+  class CognitiveProject {
+    +uuid id
+    +uuid account_id
+    +string name
+  }
+
+  class CognitiveMemoryItem {
+    +uuid account_id
+    +uuid project_id
+    +string memory_key
+    +string claim_state
+  }
+
+  class GuardEvent {
+    +uuid account_id
+    +string decision
+    +json violations
+  }
+
+  class FeatureFlag {
+    +uuid account_id
+    +string feature_key
+    +boolean enabled
+  }
+
+  class ErrorReport {
+    +uuid account_id
+    +uuid project_id
+    +string error_code
+    +json context
+  }
+
+  CognitiveAccount "1" --> "1" CognitiveInstance
+  CognitiveAccount "1" --> "*" CognitiveProject
+  CognitiveAccount "1" --> "*" CognitiveMemoryItem
+  CognitiveAccount "1" --> "*" GuardEvent
+  CognitiveAccount "1" --> "*" FeatureFlag
+  CognitiveAccount "1" --> "*" ErrorReport
+  CognitiveProject "1" --> "*" CognitiveMemoryItem
+  CognitiveProject "1" --> "*" ErrorReport
+```
