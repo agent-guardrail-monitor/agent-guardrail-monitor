@@ -44,13 +44,13 @@ export function buildCognitiveBlockerMcpServer(context) {
   const accountId = context.accountId;
   const role = context.role;
   const server = new McpServer(
-    { name: "cognitive-blocker-plugin", version: "0.2.0" },
+    { name: "cognitive-blocker-plugin", version: "0.3.0" },
     {
       instructions:
-        "This app is an account-scoped blocking layer. Before a material answer or action on a controlled path, call cognitive_blocker_check. " +
-        "If the result is BLOCK, do not treat the proposed action or answer as valid. " +
-        "Do not invent rules. Use only the canonical rule IDs returned by this server. " +
-        "Tenant isolation, RBAC, feature flags, errors and audit state are internal to this plugin."
+        "This app is an account-scoped blocking layer with controlled recovery. Before a material answer or action on a controlled path, call cognitive_blocker_check. " +
+        "If recovery.phase is CORRECT, preserve the validated parts, correct only the listed violations, then call cognitive_blocker_check again with the returned recoverySessionId. " +
+        "If recovery.phase is ALLOW, the candidate may proceed on the controlled path. If recovery.phase is SAFE_STOP, stop automatic retries and do not claim completion. " +
+        "Do not invent rules. Use only canonical rule IDs returned by this server. Tenant isolation, RBAC, recovery, feature flags, errors and audit state are internal to this plugin."
     }
   );
 
@@ -67,7 +67,7 @@ export function buildCognitiveBlockerMcpServer(context) {
       const overrides = await listFeatureFlags(accountId);
       return response({
         product: "Cognitive Blocker Plugin",
-        version: "0.2.0",
+        version: "0.3.0",
         rulesetVersion: RULESET_VERSION,
         canonicalRuleCount: RULE_CATALOG.length,
         accountScoped: true,
@@ -82,13 +82,19 @@ export function buildCognitiveBlockerMcpServer(context) {
     "cognitive_blocker_check",
     {
       title: "Check proposed AI response or action",
-      description: "Evaluates only canonical blocking rules and returns ALLOW or BLOCK.",
-      inputSchema: z.object({ payload: z.record(z.string(), z.unknown()) }),
+      description: "Evaluates canonical blocking rules and drives the controlled CORRECT -> RECHECK -> ALLOW or SAFE_STOP recovery loop.",
+      inputSchema: z.object({
+        payload: z.record(z.string(), z.unknown()),
+        recoverySessionId: z.string().uuid().optional()
+      }),
       annotations: readOnly
     },
-    async ({ payload }) => {
+    async ({ payload, recoverySessionId }) => {
       authorize(role, PERMISSIONS.GUARD_CHECK);
-      return response(await evaluateForAccount(accountId, payload));
+      return response(await evaluateForAccount(accountId, {
+        ...payload,
+        recoverySessionId: recoverySessionId || payload.recoverySessionId || null
+      }));
     }
   );
 
