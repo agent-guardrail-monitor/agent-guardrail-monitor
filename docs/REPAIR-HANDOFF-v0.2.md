@@ -1,73 +1,37 @@
-# Agent Guardrail Monitor → Software Repair Engineer handoff
+# Historical v0.2 Repair Handoff — SUPERSEDED
 
-## Purpose
+Status: **SUPERSEDED by the integrated v0.3 repair engine.**
 
-The integration keeps the products separate while giving them one deterministic workflow:
+This document preserves the architecture used in v0.2, when Agent Guardrail Monitor and Software Repair Engineer were separate components connected by a machine-readable handoff.
+
+The v0.2 flow was:
 
 ```text
-detect -> prove -> prepare repair handoff -> diagnose -> repair -> retest -> validate
+detect -> prove -> prepare repair handoff -> separate repair agent -> retest -> validate
 ```
 
-Agent Guardrail Monitor owns detection evidence and post-repair verification.
-Software Repair Engineer owns root-cause investigation, patching, executable regression tests, and recurrence hardening.
+That separation is no longer the active product architecture.
 
-## Trigger
+In v0.3:
 
-A handoff is created only when AGM has repair-triggering evidence, such as:
+- Agent Guardrail Monitor owns detection and evidence;
+- the repair protocol is built into Agent Guardrail Monitor;
+- the GitHub App can create the repair branch and pull request itself;
+- the integrated engine performs root-cause planning and bounded patch generation;
+- AGM remains the final verification authority;
+- `auto_merge` is available only through explicit repository configuration.
 
-- a snapshot regression;
-- a new static `FAIL` finding;
-- a runtime proof with status `FAIL`.
+The legacy symbols `buildRepairHandoff`, `saveRepairHandoff`, and MCP tool `agm_prepare_repair_handoff` remain temporarily as compatibility aliases. Their consumer is now the integrated AGM repair engine.
 
-A runtime version change by itself does not create a repair requirement.
+See:
 
-## Contract
+- [Integrated Repair Engine — v0.3](REPAIR-ENGINE-v0.3.md)
+- [Marketplace submission configuration](MARKETPLACE.md)
 
-The artifact uses `kind: AGM_TO_SRE_REPAIR_HANDOFF`.
-
-The `repairRequest` object is shaped for the Software Repair Engineer `sre_preflight` interface:
-
-- `objective`
-- `systemKind`
-- `failureEvidence`
-- `changedFiles`
-- `checksRun`
-- `recurrenceReviewed`
-- `deploymentInScope`
-- `deploymentVerified`
-
-AGM sets `rootCauseState` to `UNKNOWN`. Root cause belongs to the repair investigation and must not be inferred from temporal correlation with an update.
-
-## CLI behavior
-
-A failing command:
-
-```bash
-agm gate --baseline baseline.json
-```
-
-writes:
+The original v0.2 artifact path may still appear in older CLI workflows:
 
 ```text
 .agent-guardrail-monitor/repair-handoff.json
 ```
 
-Choose another path with:
-
-```bash
-agm gate --baseline baseline.json --repair-handoff artifacts/repair.json
-```
-
-The gate still exits non-zero on failure.
-
-## ChatGPT MCP behavior
-
-`agm_prepare_repair_handoff` converts AGM-observed regression evidence into the same contract. It is read-only and does not execute a patch.
-
-An orchestrator can pass `repairRequest` to the separate Software Repair Engineer. After that agent returns a verified repair, rerun AGM against the same approved baseline.
-
-## Completion rule
-
-Repair is not complete merely because files changed.
-
-The verification loop is complete only when the relevant post-patch executable checks pass and AGM no longer reproduces the original regression. If runtime proof is required and available, it must return `PASS`.
+It should be interpreted as historical compatibility data, not as a handoff to a separate product.

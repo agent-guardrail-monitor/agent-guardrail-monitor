@@ -4,9 +4,10 @@ import { toNodeHandler } from "@modelcontextprotocol/node";
 import { z } from "zod";
 import { preActionPipeline, finalCompliancePipeline } from "../src/enforcement/pipeline.mjs";
 import { hashObject, validatePolicy, VERDICTS } from "../src/enforcement/policy.mjs";
-import { buildRepairHandoff } from "../src/repair-handoff.mjs";
+import { buildRepairRequest } from "../src/repair-handoff.mjs";
+import { FINAL_REPAIR_STATES, repairPreflight, validateRepairEvidence } from "../src/repair/protocol.mjs";
 
-const VERSION = "0.2.0-alpha.3";
+const VERSION = "0.3.0-alpha.1";
 const DEFAULT_POLICY_URL = new URL("../policy/chatgpt.default.json", import.meta.url);
 
 function loadPolicy() {
@@ -85,6 +86,14 @@ const repairProofSchema = z.object({
   status: z.literal("FAIL"),
   reason: z.string().min(1).max(2000)
 });
+
+const repairCheckSchema = z.object({
+  name: z.string().min(1).max(300),
+  phase: z.string().min(1).max(120),
+  status: z.enum(["passed", "failed", "blocked", "not_run"]).optional(),
+  exitCode: z.number().int().optional(),
+  evidence: z.string().max(4000).optional()
+});
 export function buildAgmMcpServer() {
   const server = new McpServer(
     { name: "agent-guardrail-monitor", version: VERSION },
@@ -92,10 +101,10 @@ export function buildAgmMcpServer() {
       instructions:
         "When this app is enabled for a conversation, use agm_preflight before a material action or answer. " +
         "If the verdict is BLOCK, REQUIRE_REVIEW, or UNKNOWN, do not represent the action as approved or completed. " +
-        "When AGM-observed regression evidence requires software repair, use agm_prepare_repair_handoff and route only its repairRequest to the separate Software Repair Engineer. " +
-        "After repair, AGM must retest the original control before a verified completion claim. " +
-        "Before releasing a final answer with material factual or execution claims, use agm_validate_output. " +
-        "Only release when it returns release=true. This app does not override ChatGPT platform policy and cannot " +
+        "When AGM-observed regression evidence requires repair, use agm_prepare_repair and keep diagnosis, patching, regression testing, and validation inside the integrated AGM repair loop. " +
+        "Use agm_repair_preflight before a repair completion claim and agm_validate_repair immediately before claiming VERIFIED FIX. " +
+        "AGM must retest the original control after repair. Before releasing material factual or execution claims, use agm_validate_output. " +
+        "Only release when the relevant deterministic gate returns release=true. This app does not override platform policy and cannot " +
         "intercept turns in which the host does not invoke the app."
     }
   );
@@ -120,7 +129,7 @@ export function buildAgmMcpServer() {
         policyHash: hashObject(policy),
         policyValid: validation.valid,
         policyErrors: validation.errors,
-        capability: "MCP_DECISION_GATE",
+        capability: "GUARDRAIL_MONITOR_AND_REPAIR_GATE",
         enforcementState: "AVAILABLE_WHEN_INVOKED",
         limitations: [
           "The MCP app cannot intercept a ChatGPT turn that does not invoke it.",
@@ -223,28 +232,87 @@ export function buildAgmMcpServer() {
     }
   );
 
+  const repairRequestSchema = z.object({
+    regressions: z.array(repairRegressionSchema).max(50).default([]),
+    findings: z.array(repairFindingSchema).max(50).default([]),
+    proofs: z.array(repairProofSchema).max(30).default([]),
+    context: z.object({
+      cwd: z.string().max(500).optional(),
+      baselineGeneratedAt: z.string().max(80).optional(),
+      currentGeneratedAt: z.string().max(80).optional(),
+      objective: z.string().max(3000).optional(),
+      systemKind: z.string().max(120).optional()
+    }).default({})
+  });
+
+  server.registerTool(
+    "agm_prepare_repair",
+    {
+      title: "Prepare integrated AGM repair",
+      description:
+        "Transforms AGM-observed regression evidence into an internal repair request for AGM's integrated repair engine.",
+      inputSchema: repairRequestSchema,
+      annotations: annotations()
+    },
+    async (input) => response(buildRepairRequest(input))
+  );
+
   server.registerTool(
     "agm_prepare_repair_handoff",
     {
-      title: "Prepare Software Repair Engineer handoff",
+      title: "Prepare integrated AGM repair (legacy alias)",
       description:
-        "Transforms AGM-observed regression evidence into a structured Software Repair Engineer preflight payload. " +
-        "This tool does not diagnose root cause, patch files, or claim that a repair was completed.",
+        "Deprecated compatibility alias for agm_prepare_repair. The repair consumer is now the integrated AGM repair engine.",
+      inputSchema: repairRequestSchema,
+      annotations: annotations()
+    },
+    async (input) => response(buildRepairRequest(input))
+  );
+
+  server.registerTool(
+    "agm_repair_preflight",
+    {
+      title: "AGM repair preflight",
+      description:
+        "Evaluates whether failure evidence, root cause, patch state, verification, recurrence review, and deployment proof support the next repair stage.",
       inputSchema: z.object({
-        regressions: z.array(repairRegressionSchema).max(50).default([]),
-        findings: z.array(repairFindingSchema).max(50).default([]),
-        proofs: z.array(repairProofSchema).max(30).default([]),
-        context: z.object({
-          cwd: z.string().max(500).optional(),
-          baselineGeneratedAt: z.string().max(80).optional(),
-          currentGeneratedAt: z.string().max(80).optional(),
-          objective: z.string().max(3000).optional(),
-          systemKind: z.string().max(120).optional()
-        }).default({})
+        objective: z.string().min(1).max(3000),
+        failureEvidence: z.array(z.string().min(1).max(3000)).max(30).default([]),
+        rootCause: z.string().max(5000).optional(),
+        changedFiles: z.array(z.string().min(1).max(500)).max(200).default([]),
+        checksRun: z.array(repairCheckSchema).max(100).default([]),
+        recurrenceReviewed: z.boolean().default(false),
+        deploymentInScope: z.boolean().default(false),
+        deploymentVerified: z.boolean().default(false)
       }),
       annotations: annotations()
     },
-    async (input) => response(buildRepairHandoff(input))
+    async (input) => response({
+      ...repairPreflight(input),
+      objective: input.objective
+    })
+  );
+
+  server.registerTool(
+    "agm_validate_repair",
+    {
+      title: "Validate integrated AGM repair",
+      description:
+        "Final deterministic evidence gate. VERIFIED FIX is released only when the integrated repair loop has failure evidence, root cause, changed files, recurrence review, and passing post-patch executable proof.",
+      inputSchema: z.object({
+        requestedState: z.enum(FINAL_REPAIR_STATES),
+        failureEvidence: z.array(z.string().min(1).max(3000)).max(30).default([]),
+        rootCause: z.string().max(5000).optional(),
+        changedFiles: z.array(z.string().min(1).max(500)).max(200).default([]),
+        checksRun: z.array(repairCheckSchema).max(100).default([]),
+        recurrenceReview: z.string().max(5000).optional(),
+        deploymentInScope: z.boolean().default(false),
+        deploymentVerification: z.string().max(5000).optional(),
+        residualRisks: z.array(z.string().min(1).max(2000)).max(50).default([])
+      }),
+      annotations: annotations()
+    },
+    async (input) => response(validateRepairEvidence(input))
   );
 
   server.registerTool(

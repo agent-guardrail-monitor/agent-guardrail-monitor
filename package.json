@@ -1,7 +1,7 @@
 {
     "name":  "agent-guardrail-monitor",
-    "version":  "0.2.0-alpha.3",
-    "description":  "Detect coding-agent guardrail drift and enforce deterministic pre-action policy on controlled runtimes.",
+    "version":  "0.3.0-alpha.1",
+    "description":  "Detect, prove, and repair coding-agent guardrail regressions with deterministic verification.",
     "type":  "module",
     "bin":  {
                 "agent-guardrail-monitor":  "./bin/agent-guardrail-monitor.mjs",
@@ -48,7 +48,9 @@
                      "ci",
                      "policy-engine",
                      "agent-governance",
-                     "runtime-enforcement"
+                     "runtime-enforcement",
+                     "auto-repair",
+                     "regression-repair"
                  ],
     "license":  "MIT",
     "dependencies":  {

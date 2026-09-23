@@ -7,7 +7,7 @@ import {
 } from "./core.mjs";
 import { proveInstalled } from "./prove.mjs";
 import { runEnforcementCommand } from "./enforcement/cli.mjs";
-import { buildRepairHandoff, saveRepairHandoff } from "./repair-handoff.mjs";
+import { buildRepairRequest, saveRepairRequest } from "./repair-handoff.mjs";
 
 const DEFAULT_DIR = ".agent-guardrail-monitor";
 
@@ -88,7 +88,7 @@ Usage:
   agm snapshot [--cwd DIR] [--out FILE] [--prove] [--live]
   agm baseline [--cwd DIR] [--out FILE] [--prove] [--live]
   agm diff BASELINE CURRENT [--json]
-  agm gate --baseline FILE [--cwd DIR] [--prove] [--live] [--json] [--repair-handoff FILE]
+  agm gate --baseline FILE [--cwd DIR] [--prove] [--live] [--json] [--repair-request FILE]
   agm policy validate|compile|check ...
   agm hook --runtime RUNTIME --policy POLICY.json
   agm install-hook --runtime claude|copilot|codex [--cwd DIR] [--policy POLICY.json]
@@ -176,11 +176,11 @@ export async function main(args) {
     const current = await makeSnapshot(rest);
     const diff = compareSnapshots(baseline, current);
     const gateFailed = diff.verdict === "FAIL" || failCount(current) > 0;
-    let repairHandoff = null;
-    let repairHandoffFile = null;
+    let repairRequest = null;
+    let repairRequestFile = null;
 
     if (gateFailed) {
-      repairHandoff = buildRepairHandoff({
+      repairRequest = buildRepairRequest({
         regressions: diff.regressions,
         findings: current.findings,
         proofs: current.proofs,
@@ -190,19 +190,21 @@ export async function main(args) {
           currentGeneratedAt: current.generatedAt
         }
       });
-      repairHandoffFile = saveRepairHandoff(
-        repairHandoff,
-        value(rest, "--repair-handoff", path.join(DEFAULT_DIR, "repair-handoff.json"))
+      const repairRequestPath = value(
+        rest,
+        "--repair-request",
+        value(rest, "--repair-handoff", path.join(DEFAULT_DIR, "repair-request.json"))
       );
+      repairRequestFile = saveRepairRequest(repairRequest, repairRequestPath);
     }
 
     if (json) {
-      console.log(JSON.stringify({ current, diff, repairHandoff, repairHandoffFile }, null, 2));
+      console.log(JSON.stringify({ current, diff, repairRequest, repairRequestFile }, null, 2));
     } else {
       printSnapshot(current);
       console.log("");
       printDiff(diff);
-      if (repairHandoffFile) console.log(`Repair handoff: ${repairHandoffFile}`);
+      if (repairRequestFile) console.log(`Repair request: ${repairRequestFile}`);
     }
     if (gateFailed) process.exitCode = 1;
     return;
