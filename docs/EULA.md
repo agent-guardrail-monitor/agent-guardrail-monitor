@@ -1,49 +1,41 @@
-# Agent Guardrail Monitor End User License Agreement
+# Contrato de Uso — O Guardião - W
 
-Effective date: September 23, 2026
+Data de vigência: 23 de setembro de 2026
 
-This End User License Agreement governs use of the Agent Guardrail Monitor GitHub App, hosted service, CLI, integrated repair engine, and related integration surfaces.
+Este contrato vale para o uso do O Guardião - W no GitHub e nos demais pontos de conexão oferecidos pelo produto.
 
-## License
+## Finalidade
 
-Subject to this agreement and the repository license, users may install and use Agent Guardrail Monitor for guardrail verification, policy evaluation, CI checks, supported enforcement workflows, and automated repair of supported guardrail regressions.
+O Guardião acompanha as travas de segurança dos robôs de IA usados para programar.
 
-## Pre-release status
+Quando encontra uma FALHA que pode ser resolvida dentro do alcance desta versão, ele pode preparar um conserto.
 
-Version 0.3 is pre-release software. Supported surfaces, repair scope, and enforcement guarantees are limited to the capabilities explicitly documented for the installed version.
+## Como o conserto entra
 
-## Automated repair
+Por padrão, o conserto fica separado para revisão.
 
-When repair is enabled, Agent Guardrail Monitor may create a dedicated repair branch, write a bounded patch, and open a pull request in an installed repository using the GitHub permissions approved by the repository owner.
+O modo totalmente automático só funciona quando o usuário escolhe essa opção.
 
-The default repair mode creates a pull request and does not merge it automatically.
+## Responsabilidade do usuário
 
-Automatic merge occurs only when the repository explicitly configures `auto_merge` and the repair satisfies the applicable verification gates and repository checks.
+O usuário continua responsável por definir quem pode acessar os repositórios, quem pode aprovar mudanças e quais ambientes podem receber alterações.
 
-## User responsibilities
+O estado APROVADO vale apenas para aquilo que O Guardião conseguiu provar.
 
-Users are responsible for reviewing their runtime permissions, repository configuration, deployment boundaries, branch protection, security requirements, and repair-mode configuration.
+DESCONHECIDO significa que ainda falta prova.
 
-A PASS result applies only to the evidence and controls evaluated by the product. UNKNOWN means evidence is insufficient and must not be treated as PASS.
+## Versão de teste
 
-Users remain responsible for reviewing changes appropriate to their development and production governance, particularly when automatic merge is enabled.
+A versão atual ainda é alpha. Funções e limites podem mudar conforme os robôs de IA e o GitHub mudam.
 
-## External model processing
+## Disponibilidade
 
-The hosted repair engine may use a configured OpenAI API model to analyze bounded failure evidence and relevant before/after repository context and to propose a structured repair patch. See the Privacy Policy for data-processing details.
+O serviço funciona em regime de melhor esforço durante a fase alpha.
 
-## Availability
+## Encerramento
 
-The hosted service is provided on a best-effort basis during the alpha period. Features may change as runtime vendors change hooks, permissions, trust models, or APIs.
+O usuário pode desconectar O Guardião e parar de usar o serviço quando quiser.
 
-## Warranty and liability
-
-To the maximum extent allowed by applicable law, the software and hosted service are provided without warranties beyond those expressly required by law. The open-source components remain subject to the MIT License included in the repository.
-
-## Termination
-
-Users may stop using the service and uninstall the GitHub App at any time. Marketplace plan changes and cancellations are handled through GitHub Marketplace when applicable.
-
-## Support
+## Ajuda
 
 https://github.com/agent-guardrail-monitor/agent-guardrail-monitor/issues
