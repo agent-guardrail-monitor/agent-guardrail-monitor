@@ -50,7 +50,7 @@ The plan is rejected if it:
 - changes more than eight files;
 - exceeds per-file size limits;
 - attempts path traversal or Git internals;
-- changes GitHub Actions workflow files without an explicit configuration allowing that scope.
+- attempts to change GitHub Actions workflow files.
 
 The default hosted model is configurable with `AGM_REPAIR_MODEL`. The current default is `gpt-5.6-sol`. The OpenAI Responses API request uses `store: false`.
 
@@ -82,8 +82,7 @@ Default:
   "repair": {
     "enabled": true,
     "mode": "pull_request",
-    "waitForChecks": true,
-    "allowWorkflowChanges": false
+    "waitForChecks": true
   }
 }
 ```
