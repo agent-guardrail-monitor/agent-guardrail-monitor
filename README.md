@@ -1,12 +1,12 @@
 # Agent Guardrail Monitor
 
-**Independent guardrail verification for AI coding-agent updates.**
+**Detect, prove, and repair AI coding-agent guardrail regressions.**
 
-Agent Guardrail Monitor is a vendor-neutral GitHub App and CLI that verifies the controls around Claude Code, OpenAI Codex, and GitHub Copilot CLI, surfaces regressions when a later runtime or configuration state loses a control that previously existed, and in v0.2-alpha adds deterministic pre-action policy enforcement on runtime surfaces that expose a usable blocking hook.
+Agent Guardrail Monitor is a vendor-neutral GitHub App and CLI that verifies controls around Claude Code, OpenAI Codex, and GitHub Copilot CLI, proves regressions against prior evidence, and in v0.3-alpha adds an integrated closed-loop repair engine that can diagnose supported guardrail regressions, create a bounded repair branch, apply a structured patch, re-run verification, and open a pull request. Repositories can explicitly opt into verified auto-merge.
 
 **Free GitHub App:** [Install Agent Guardrail Monitor](https://github.com/apps/agent-guardrail-monitor)
 
-The GitHub App requests only **Contents: read**, **Metadata: read**, and **Checks: read/write**. On each push it publishes an **Agent Guardrail Monitor** check on the pushed commit.
+The v0.3 GitHub App requires **Metadata: read**, **Contents: read/write**, **Checks: read/write**, and **Pull requests: read/write**. On each push it publishes an **Agent Guardrail Monitor** check. Write permissions are used only for the integrated repair workflow: a dedicated `agm/repair/...` branch and pull request by default.
 
 It treats **PASS**, **FAIL**, and **UNKNOWN** as different states. A missing proof is never promoted to PASS.
 
@@ -47,31 +47,38 @@ See [Enforcement installation](docs/INSTALL-ENFORCEMENT-v0.2.md) and [Architectu
 
 ## ChatGPT MCP app
 
-v0.2.0-alpha.3 adds a remote, read-only MCP decision app for ChatGPT at `https://agent-guardrail-monitor.onrender.com/mcp`.
+v0.3.0-alpha.1 extends the remote MCP app at `https://agent-guardrail-monitor.onrender.com/mcp` with the integrated repair protocol.
 
-It exposes `agm_status`, `agm_preflight`, `agm_prepare_repair_handoff`, and `agm_validate_output`. A mandatory skill without load, execution, and proof is blocked before release; unknown factual claims presented as facts are blocked by the final gate.
+It exposes AGM policy gates plus `agm_prepare_repair`, `agm_repair_preflight`, and `agm_validate_repair`. The legacy `agm_prepare_repair_handoff` name remains only as a compatibility alias; its consumer is the integrated AGM repair engine.
 
 The ChatGPT integration reports `AVAILABLE_WHEN_INVOKED`: it produces deterministic decisions whenever the host calls AGM, while ordinary ChatGPT turns outside the MCP call path remain outside AGM authority. See [ChatGPT app installation](docs/INSTALL-CHATGPT-APP.md).
 
-### Software Repair Engineer handoff
+### Integrated repair engine
 
-When AGM observes a repair-triggering regression, it now prepares a machine-readable handoff for the separate Software Repair Engineer. AGM remains the evidence and verification boundary; the repair agent owns diagnosis, patching, regression testing, and hardening.
-
-The handoff deliberately keeps root cause as `UNKNOWN` until the repair investigation establishes it. The repair flow is:
+In v0.3, repair is part of Agent Guardrail Monitor itself. There is no separate operational product in the repair path.
 
 ```text
-detect -> prove -> prepare repair handoff -> diagnose -> repair -> retest -> validate
+detect -> prove -> compare baseline/current -> diagnose -> patch -> verify -> PR -> checks -> merge (optional) -> re-verify
 ```
 
-The ChatGPT MCP tool `agm_prepare_repair_handoff` returns a payload whose `repairRequest` is shaped for `sre_preflight`. The CLI writes the same contract automatically when `agm gate` fails.
+For a repair-triggering default-branch regression, AGM captures the exact pre-regression commit and the broken commit, sends only bounded relevant context to the configured repair model, validates a structured patch, writes changes to an `agm/repair/...` branch, re-runs the original guardrail evidence check, and opens a pull request.
 
-```text
-Claude Code  2.1.263 -> 2.1.264
-PreToolUse   present  -> missing
+The default mode is `pull_request`. A repository must explicitly configure `auto_merge` before AGM may merge a verified repair automatically.
 
-Gate verdict: FAIL
-REGRESSION: HOOK_EVENT_REMOVED
+```json
+{
+  "repair": {
+    "enabled": true,
+    "mode": "pull_request",
+    "waitForChecks": true,
+    "allowWorkflowChanges": false
+  }
+}
 ```
+
+Configuration lives at `.agent-guardrail-monitor/config.json`. Workflow-file mutation is blocked unless explicitly allowed. A repair is never released as `VERIFIED FIX` from model output alone; AGM requires executable post-patch evidence and, for auto-merge, re-verifies the merged state.
+
+The hosted repair provider uses the OpenAI Responses API with `store: false`. The default model is `gpt-5.6-sol`, configurable with `AGM_REPAIR_MODEL`. See [Integrated Repair Engine — v0.3](docs/REPAIR-ENGINE-v0.3.md).
 
 ## Current support
 
@@ -115,7 +122,7 @@ npm link
 agm doctor
 ```
 
-The public distribution installs directly from GitHub. An npm publication is not required; v0.2-alpha remains a pre-release until its release tag is published.
+The public distribution installs directly from GitHub. An npm publication is not required; v0.3-alpha remains a pre-release until its release tag is published.
 
 ## Fast path
 
