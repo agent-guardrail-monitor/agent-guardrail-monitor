@@ -248,13 +248,13 @@ For runtime proof:
 agm gate --baseline baseline.json --prove --live
 ```
 
-When the gate fails, AGM writes the repair contract to:
+When the local gate fails, AGM writes an integrated repair request to:
 
 ```text
-.agent-guardrail-monitor/repair-handoff.json
+.agent-guardrail-monitor/repair-request.json
 ```
 
-Use `--repair-handoff FILE` to choose another path. The artifact contains only AGM failure evidence and repair/verification metadata; it does not claim a root cause or execute a patch.
+Use `--repair-request FILE` to choose another path. The legacy `--repair-handoff` flag remains accepted for compatibility. The local artifact captures failure evidence for the integrated repair protocol; the hosted GitHub App can execute the closed-loop repair workflow when the required permissions and repair provider are configured.
 
 ## What currently fails the gate
 
