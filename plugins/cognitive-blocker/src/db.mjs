@@ -66,7 +66,8 @@ export async function installAccount({ platform, externalAccountRef, label }) {
        ON CONFLICT(account_id)
        DO UPDATE SET token_hash = EXCLUDED.token_hash, ruleset_version = EXCLUDED.ruleset_version,
                      role = 'OWNER', status = 'ACTIVE', updated_at = now()
-       RETURNING id, account_id, role, ruleset_version, status`,
+       RETURNING id, account_id, role, ruleset_version, status,
+                 activation_mode, auto_register_conversations`,
       [accountId, tokenHash, RULESET_VERSION]
     );
     await client.query("COMMIT");
@@ -83,6 +84,7 @@ export async function resolveInstanceToken(token) {
   if (!token || !pool) return null;
   const result = await pool.query(
     `SELECT i.id AS instance_id, i.account_id, i.role,
+            i.activation_mode, i.auto_register_conversations,
             a.platform, a.external_account_ref
        FROM cognitive_instances i
        JOIN cognitive_accounts a ON a.id = i.account_id
