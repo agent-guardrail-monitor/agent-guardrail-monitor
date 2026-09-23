@@ -37,19 +37,13 @@ export async function beginAccountTurn(accountId, input = {}) {
     input.requestFingerprint
   );
 
-  if (userMessage) {
-    await appendAcceptedTurn(accountId, conversation.id, {
-      turnKey: userTurnKey,
-      role: "user",
-      content: userMessage
-    });
-  }
-
   const accountMemory = await listMemory(accountId, null);
   const projectMemory = input.projectId
     ? await listMemory(accountId, input.projectId)
     : [];
 
+  // Rehydrate from turns that existed before the current user message.
+  // The current message is returned separately with highest conversational priority.
   const history = await loadConversationContext(
     accountId,
     conversation.id,
@@ -59,6 +53,14 @@ export async function beginAccountTurn(accountId, input = {}) {
       relevantLimit: input.relevantLimit
     }
   );
+
+  if (userMessage) {
+    await appendAcceptedTurn(accountId, conversation.id, {
+      turnKey: userTurnKey,
+      role: "user",
+      content: userMessage
+    });
+  }
 
   return {
     activationMode: "ALWAYS_ON",
