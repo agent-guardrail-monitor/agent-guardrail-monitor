@@ -1,6 +1,13 @@
+import crypto from "node:crypto";
 import { evaluateGuard } from "./engine.mjs";
 import { appendGuardEvent, listFeatureFlags, listMemory } from "./db.mjs";
 import { isFeatureEnabled, resolveFeatures } from "./feature-catalog.mjs";
+import {
+  createRecoverySession,
+  getRecoverySession,
+  updateRecoverySession
+} from "./recovery-db.mjs";
+import { buildRecoveryPlan, RECOVERY_MAX_ATTEMPTS } from "./recovery.mjs";
 
 function unique(values) {
   return [...new Set(values.filter(Boolean))];
@@ -11,6 +18,17 @@ function memoryValue(item, key) {
   if (value && typeof value === "object" && key in value) return value[key];
   if (typeof value === "string") return value;
   return null;
+}
+
+function fingerprintPayload(payload) {
+  const normalized = { ...payload };
+  delete normalized.recoverySessionId;
+  delete normalized.requestFingerprint;
+  return crypto.createHash("sha256").update(JSON.stringify(normalized)).digest("hex");
+}
+
+function recoveryError(code, extra = {}) {
+  return Object.assign(new Error(code.toLowerCase()), { code, ...extra });
 }
 
 export function applyMemoryContext(payload, memoryItems) {
@@ -50,15 +68,54 @@ export function applyMemoryContext(payload, memoryItems) {
 }
 
 export async function evaluateForAccount(accountId, payload) {
+  const recoverySessionId = payload.recoverySessionId || null;
+  const candidatePayload = { ...payload };
+  delete candidatePayload.recoverySessionId;
+
+  const candidateFingerprint =
+    candidatePayload.requestFingerprint || fingerprintPayload(candidatePayload);
+
+  let recoverySession = null;
+  let attempt = 1;
+
+  if (recoverySessionId) {
+    recoverySession = await getRecoverySession(accountId, recoverySessionId);
+
+    if (!recoverySession) {
+      throw recoveryError("RECOVERY_SESSION_NOT_FOUND", { recoverySessionId });
+    }
+
+    if (recoverySession.closed_at) {
+      throw recoveryError("RECOVERY_SESSION_CLOSED", {
+        recoverySessionId,
+        phase: recoverySession.phase
+      });
+    }
+
+    const sessionProject = recoverySession.project_id || null;
+    const candidateProject = candidatePayload.projectId || null;
+    if (sessionProject !== candidateProject) {
+      throw recoveryError("RECOVERY_PROJECT_MISMATCH", {
+        recoverySessionId,
+        sessionProject,
+        candidateProject
+      });
+    }
+
+    attempt = recoverySession.last_request_fingerprint === candidateFingerprint
+      ? recoverySession.attempt
+      : Math.min(recoverySession.attempt + 1, RECOVERY_MAX_ATTEMPTS);
+  }
+
   const featureOverrides = await listFeatureFlags(accountId);
   const features = resolveFeatures(featureOverrides);
 
   const accountMemory = await listMemory(accountId, null);
-  const projectMemory = payload.projectId
-    ? await listMemory(accountId, payload.projectId)
+  const projectMemory = candidatePayload.projectId
+    ? await listMemory(accountId, candidatePayload.projectId)
     : [];
   const memoryItems = [...accountMemory, ...projectMemory];
-  const enrichedPayload = applyMemoryContext(payload, memoryItems);
+  const enrichedPayload = applyMemoryContext(candidatePayload, memoryItems);
 
   const effectivePayload = isFeatureEnabled("semantic_signals", featureOverrides)
     ? enrichedPayload
@@ -69,10 +126,33 @@ export async function evaluateForAccount(accountId, payload) {
   if (isFeatureEnabled("guard_event_history", featureOverrides)) {
     await appendGuardEvent(accountId, {
       result,
-      projectId: payload.projectId || null,
-      taskContractId: payload.taskContractId || null,
-      requestFingerprint: payload.requestFingerprint || null
+      projectId: candidatePayload.projectId || null,
+      taskContractId: candidatePayload.taskContractId || null,
+      requestFingerprint: candidateFingerprint
     });
+  }
+
+  const recoveryPlan = buildRecoveryPlan(effectivePayload, result, attempt);
+  let persistedRecovery = recoverySession;
+
+  if (!recoverySession && result.decision === "BLOCK") {
+    persistedRecovery = await createRecoverySession(accountId, {
+      projectId: candidatePayload.projectId || null,
+      rootFingerprint: candidateFingerprint,
+      lastRequestFingerprint: candidateFingerprint,
+      plan: recoveryPlan,
+      result
+    });
+  } else if (recoverySession) {
+    persistedRecovery = await updateRecoverySession(
+      accountId,
+      recoverySession.id,
+      {
+        lastRequestFingerprint: candidateFingerprint,
+        plan: recoveryPlan,
+        result
+      }
+    );
   }
 
   return {
@@ -84,6 +164,10 @@ export async function evaluateForAccount(accountId, payload) {
       claimState: item.claim_state,
       scope: item.project_id ? "project" : "account",
       version: item.version
-    }))
+    })),
+    recovery: {
+      recoverySessionId: persistedRecovery?.id || null,
+      ...recoveryPlan
+    }
   };
 }
