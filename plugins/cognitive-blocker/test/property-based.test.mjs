@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import * as fc from "fast-check";
 import { evaluateGuard } from "../src/engine.mjs";
 import { RULE_IDS } from "../src/rule-catalog.mjs";
+import { buildRecoveryPlan, resolveRecoveryAttempt } from "../src/recovery.mjs";
 import { can, PERMISSIONS, ROLES } from "../src/rbac.mjs";
 import {
   FEATURE_CATALOG,
@@ -150,6 +151,49 @@ test("property: optional feature flags preserve the explicit account value", () 
       (key, enabled) => {
         const overrides = [{ feature_key: key, enabled }];
         assert.equal(isFeatureEnabled(key, overrides), enabled);
+      }
+    ),
+    FC_OPTIONS
+  );
+});
+
+
+test("property: blocked recovery attempts are always bounded to 1..3", () => {
+  fc.assert(
+    fc.property(
+      fc.integer({ min: -1000, max: 1000 }),
+      (attempt) => {
+        const plan = buildRecoveryPlan(
+          {},
+          { decision: "BLOCK", violations: [{ ruleId: "RES-001", evidence: "generic" }] },
+          attempt
+        );
+        assert.ok(plan.attempt >= 1 && plan.attempt <= 3);
+        assert.equal(plan.phase === "SAFE_STOP", plan.attempt === 3);
+        assert.equal(plan.canExecute, false);
+      }
+    ),
+    FC_OPTIONS
+  );
+});
+
+test("property: exact recovery replay never consumes another attempt", () => {
+  fc.assert(
+    fc.property(
+      fc.integer({ min: 1, max: 3 }),
+      fc.string({ minLength: 1, maxLength: 80 }),
+      (attempt, fingerprint) => {
+        const state = resolveRecoveryAttempt({
+          id: "11111111-1111-1111-1111-111111111111",
+          project_id: null,
+          phase: "CORRECT",
+          attempt,
+          last_request_fingerprint: fingerprint,
+          closed_at: null
+        }, fingerprint, null);
+
+        assert.equal(state.attempt, attempt);
+        assert.equal(state.replayed, true);
       }
     ),
     FC_OPTIONS
