@@ -14,6 +14,7 @@ import {
 import { isFeatureEnabled, resolveFeatures } from "./feature-catalog.mjs";
 import { buildInternalErrorReport } from "./internal-errors.mjs";
 import { assertPermission, PERMISSIONS, permissionMatrix } from "./rbac.mjs";
+import { beginAccountTurn } from "./context-rehydration.mjs";
 
 function response(payload) {
   return {
@@ -44,10 +45,10 @@ export function buildCognitiveBlockerMcpServer(context) {
   const accountId = context.accountId;
   const role = context.role;
   const server = new McpServer(
-    { name: "cognitive-blocker-plugin", version: "0.3.0" },
+    { name: "cognitive-blocker-plugin", version: "0.4.0" },
     {
       instructions:
-        "This app is an account-scoped blocking layer with controlled recovery. Before a material answer or action on a controlled path, call cognitive_blocker_check. " +
+        "This app is ALWAYS_ON for the installed account. For every new user turn in every controlled chat, automatically call cognitive_turn_begin before generating a candidate. The user must not be asked to activate or invoke the plugin. Then call cognitive_blocker_check before release or execution. " +
         "If recovery.phase is CORRECT, preserve the validated parts, correct only the listed violations, then call cognitive_blocker_check again with the returned recoverySessionId. " +
         "If recovery.phase is ALLOW, the candidate may proceed on the controlled path. If recovery.phase is SAFE_STOP, stop automatic retries and do not claim completion. " +
         "Do not invent rules. Use only canonical rule IDs returned by this server. Tenant isolation, RBAC, recovery, feature flags, errors and audit state are internal to this plugin."
@@ -67,14 +68,40 @@ export function buildCognitiveBlockerMcpServer(context) {
       const overrides = await listFeatureFlags(accountId);
       return response({
         product: "Cognitive Blocker Plugin",
-        version: "0.3.0",
+        version: "0.4.0",
         rulesetVersion: RULESET_VERSION,
         canonicalRuleCount: RULE_CATALOG.length,
         accountScoped: true,
+        activationMode: "ALWAYS_ON",
+        autoRegisterConversations: true,
         role,
         enforcementBoundary: "MANDATORY_PATHS_ONLY",
         features: resolveFeatures(overrides)
       });
+    }
+  );
+
+  server.registerTool(
+    "cognitive_turn_begin",
+    {
+      title: "Begin account chat turn",
+      description: "Internal ALWAYS_ON turn bootstrap. Auto-registers the chat, persists the explicit user turn, and rehydrates chat-local history plus account/project memory before generation.",
+      inputSchema: z.object({
+        platformConversationRef: z.string().min(1).max(500),
+        userMessage: z.string().max(20000).optional(),
+        userTurnRef: z.string().max(500).optional(),
+        projectId: z.string().uuid().optional(),
+        title: z.string().max(300).optional(),
+        metadata: z.record(z.string(), z.unknown()).optional(),
+        requestFingerprint: z.string().max(256).optional(),
+        recentLimit: z.number().int().min(4).max(60).optional(),
+        relevantLimit: z.number().int().min(0).max(20).optional()
+      }),
+      annotations: writeInternal
+    },
+    async (input) => {
+      authorize(role, PERMISSIONS.GUARD_CHECK);
+      return response(await beginAccountTurn(accountId, input));
     }
   );
 
