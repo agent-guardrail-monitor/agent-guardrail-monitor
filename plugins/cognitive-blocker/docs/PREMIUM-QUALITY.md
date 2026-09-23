@@ -63,7 +63,8 @@ Stryker mutates the high-value deterministic logic:
 - blocker engine;
 - RBAC;
 - feature catalog;
-- error sanitization.
+- error sanitization;
+- controlled recovery state machine.
 
 It uses Stryker's TAP runner, which integrates with the existing Node built-in test runner.
 
@@ -134,13 +135,14 @@ Mutation result:
 
 | Module | Mutation score |
 | --- | ---: |
-| All selected files | 93.17% |
+| All selected files | 93.54% |
 | blocker engine | 92.44% |
 | feature catalog | 94.38% |
 | internal error sanitization | 93.06% |
 | RBAC | 96.23% |
+| controlled recovery | 94.44% |
 
-Stryker executed 573 mutants in the first diagnostic pass. That pass scored 68.65% and was rejected by the 80% gate. The tests were strengthened rather than lowering the threshold. The verified final run scored 93.17%.
+Stryker executed 573 mutants in the first diagnostic pass. That pass scored 68.65% and was rejected by the 80% gate. The tests were strengthened rather than lowering the threshold. The verified final run after adding controlled recovery scored 93.54%. The recovery state machine itself scored 94.44%.
 
 The disposable PostgreSQL test also found a malformed PL/pgSQL dollar-quote delimiter in migration `002_internal_control_plane.sql`. The migration was corrected and a deterministic regression test was added before the PostgreSQL/RLS gate passed.
 
