@@ -34,3 +34,9 @@ test("RLS policies restrict both reads and writes to current account", () => {
   assert.equal(usingCount, tenantTables.length);
   assert.equal(checkCount, tenantTables.length);
 });
+
+test("task-to-guard references are tenant-composite", () => {
+  assert.match(sql, /UNIQUE \(id, account_id\)/);
+  assert.match(sql, /FOREIGN KEY \(task_contract_id, account_id\)/);
+  assert.match(sql, /REFERENCES cognitive_task_contracts\(id, account_id\)/);
+});
