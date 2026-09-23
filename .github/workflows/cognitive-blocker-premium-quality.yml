@@ -1,6 +1,12 @@
 name: Cognitive Blocker Premium Quality
 
 on:
+  push:
+    branches:
+      - feat/cognitive-blocker-plugin
+    paths:
+      - "plugins/cognitive-blocker/**"
+      - ".github/workflows/cognitive-blocker-premium-quality.yml"
   pull_request:
     paths:
       - "plugins/cognitive-blocker/**"
