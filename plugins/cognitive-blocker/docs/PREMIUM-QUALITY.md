@@ -119,3 +119,29 @@ eligible for database-backed E2E / release
 ```
 
 No external testing SaaS is required for these gates. Execution occurs inside the repository's GitHub Actions environment.
+
+
+## Verified CI result — 2026-09-23
+
+Verified on GitHub Actions after strengthening the mutation contracts:
+
+- production dependency audit: **PASS**;
+- fast-check property invariants: **PASS**;
+- disposable PostgreSQL 16 + real migrations + RLS tenant isolation: **PASS**;
+- Stryker mutation gate: **PASS**.
+
+Mutation result:
+
+| Module | Mutation score |
+| --- | ---: |
+| All selected files | 93.17% |
+| blocker engine | 92.44% |
+| feature catalog | 94.38% |
+| internal error sanitization | 93.06% |
+| RBAC | 96.23% |
+
+Stryker executed 573 mutants in the first diagnostic pass. That pass scored 68.65% and was rejected by the 80% gate. The tests were strengthened rather than lowering the threshold. The verified final run scored 93.17%.
+
+The disposable PostgreSQL test also found a malformed PL/pgSQL dollar-quote delimiter in migration `002_internal_control_plane.sql`. The migration was corrected and a deterministic regression test was added before the PostgreSQL/RLS gate passed.
+
+Runtime audit is intentionally separate from development tooling: `npm audit --omit=dev --audit-level=moderate` passed. The quality tools remain development-only and are omitted by the deployment template.
