@@ -223,3 +223,43 @@ test("OpenAI repair provider refuses execution without an API key", async () => 
     /OPENAI_API_KEY/
   );
 });
+
+
+test("repair plan cannot mutate files outside the evidenced guardrail scope", () => {
+  const result = validateRepairPlan({
+    ...validPlan,
+    files: [{
+      path: "README.md",
+      content: "changed",
+      reason: "unrelated change"
+    }]
+  }, {
+    allowedPaths: new Set([".claude/settings.json"])
+  });
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.includes("file_0_path_outside_repair_scope"));
+});
+
+test("auto-merge is blocked when repository checks time out", async () => {
+  let mergeCalled = false;
+  const repoClient = fakeRepoClient();
+  repoClient.waitForChecks = async () => ({ status: "timeout", runs: [], failed: [] });
+  repoClient.mergePullRequest = async () => {
+    mergeCalled = true;
+    return { merged: true, sha: "should-not-merge" };
+  };
+
+  const result = await executeRepairCycle({
+    owner: "acme",
+    repo: "demo",
+    failureEvidence: ["[claude] HOOKS_DISABLED: hooks disabled"],
+    repoClient,
+    repairModel,
+    verify: async () => ({ pass: true, evidence: "Guardrail state passes." }),
+    options: { autoMerge: true, waitForChecks: true, checkTimeoutMs: 10_000 }
+  });
+
+  assert.equal(mergeCalled, false);
+  assert.equal(result.status, "REPAIR_PR_OPENED_NEEDS_REVIEW");
+  assert.equal(result.finalState, "PATCHED, NOT VERIFIED");
+});
