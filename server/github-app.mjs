@@ -371,7 +371,6 @@ async function attemptAutomatedRepair({
     options: {
       autoMerge: config.autoMerge,
       waitForChecks: config.waitForChecks,
-      allowWorkflowChanges: config.allowWorkflowChanges,
       checkTimeoutMs: config.checkTimeoutMs
     }
   });
