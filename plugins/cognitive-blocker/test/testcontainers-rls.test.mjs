@@ -158,6 +158,18 @@ maybeTest("Testcontainers: real PostgreSQL enforces cross-tenant RLS", { timeout
         assert.equal(turnsA.rows.length, 1);
         assert.equal(turnsA.rows[0].accepted_source, "USER_EXPLICIT");
 
+        await clientA.query("SAVEPOINT blocked_turn_not_memory");
+        await assert.rejects(
+          clientA.query(
+            `INSERT INTO cognitive_turns
+               (account_id, conversation_id, turn_key, role, content, accepted_source)
+             VALUES ($1,$2,'assistant-blocked','assistant','rascunho inválido','BLOCK')`,
+            [accountA, conversationA]
+          ),
+          /check constraint|violates/i
+        );
+        await clientA.query("ROLLBACK TO SAVEPOINT blocked_turn_not_memory");
+
         await clientA.query("SAVEPOINT chat_cross_tenant");
         await assert.rejects(
           clientA.query(
