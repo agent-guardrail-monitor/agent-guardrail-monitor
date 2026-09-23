@@ -1,0 +1,58 @@
+name: Cognitive Blocker Premium Quality
+
+on:
+  pull_request:
+    paths:
+      - "plugins/cognitive-blocker/**"
+      - ".github/workflows/cognitive-blocker-premium-quality.yml"
+  workflow_dispatch:
+
+jobs:
+  property-based:
+    name: Property-based blocker invariants
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: plugins/cognitive-blocker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - run: npm install
+      - run: npm run check
+      - run: npm run test:property
+
+  postgres-rls:
+    name: Disposable PostgreSQL tenant isolation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: plugins/cognitive-blocker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - run: docker info
+      - run: npm install
+      - run: npm run test:containers
+
+  mutation:
+    name: Mutation resistance
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs:
+      - property-based
+    defaults:
+      run:
+        working-directory: plugins/cognitive-blocker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - run: npm install
+      - run: npm run test:mutation
