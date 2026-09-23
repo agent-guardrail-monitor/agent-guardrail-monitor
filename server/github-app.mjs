@@ -538,7 +538,7 @@ const server = http.createServer((req, res) => {
   }
 
   if (req.method === "GET" && url.pathname === "/privacy") {
-    return send(res, 200, `<!doctype html><meta charset="utf-8"><title>Privacy - Agent Guardrail Monitor</title><h1>Privacy</h1><p>Agent Guardrail Monitor transiently processes guardrail configuration and MCP decision inputs required to evaluate policy, skills, tools, and evidence. The application code does not persist MCP evaluation payloads and does not sell user data. Hosting infrastructure may retain ordinary operational request metadata.</p><p><a href="${REPO_URL}">Project repository</a></p>`, "text/html; charset=utf-8");
+    return send(res, 200, `<!doctype html><meta charset="utf-8"><title>Privacy - Agent Guardrail Monitor</title><h1>Privacy</h1><p>Agent Guardrail Monitor processes guardrail configuration, before/after regression evidence, MCP decision inputs, and bounded repository context needed for configured repair. When automated repair is enabled, relevant repository context may be sent to the configured OpenAI API model with <code>store: false</code> to produce a structured repair plan. Repair changes are stored by GitHub as ordinary branches, commits, and pull requests. The application does not sell user data.</p><p><a href="${REPO_URL}/blob/main/docs/PRIVACY.md">Complete Privacy Policy</a></p>`, "text/html; charset=utf-8");
   }
 
   if (req.method === "GET" && url.pathname === "/support") {
@@ -550,11 +550,11 @@ const server = http.createServer((req, res) => {
   }
 
   if (req.method === "GET" && url.pathname === "/terms") {
-    return send(res, 200, `<!doctype html><meta charset="utf-8"><title>Terms - Agent Guardrail Monitor</title><h1>Terms</h1><p>Agent Guardrail Monitor is provided as pre-release software for guardrail verification and policy decisions. Users remain responsible for validating enforcement boundaries, runtime permissions, and deployment configuration.</p><p><a href="${REPO_URL}">Project repository and license</a></p>`, "text/html; charset=utf-8");
+    return send(res, 200, `<!doctype html><meta charset="utf-8"><title>Terms - Agent Guardrail Monitor</title><h1>Terms</h1><p>Agent Guardrail Monitor is pre-release software for guardrail verification and integrated repair. Repair defaults to a dedicated pull request. Automatic merge occurs only when explicitly configured and when verification gates allow it. Users remain responsible for repository permissions, branch protection, deployment boundaries, and production governance.</p><p><a href="${REPO_URL}/blob/main/docs/EULA.md">EULA</a> &middot; <a href="${REPO_URL}">Project repository</a></p>`, "text/html; charset=utf-8");
   }
 
   if (req.method === "GET" && url.pathname === "/") {
-    return send(res, 200, `<!doctype html><meta charset="utf-8"><title>Agent Guardrail Monitor</title><h1>Agent Guardrail Monitor</h1><p>Deterministic guardrail verification and decision gates for AI agents.</p><p><a href="https://github.com/apps/agent-guardrail-monitor">Install GitHub App</a> &middot; <a href="${REPO_URL}">Repository</a> &middot; <a href="/setup">Setup</a> &middot; <a href="/privacy">Privacy</a> &middot; <a href="/terms">Terms</a> &middot; <a href="/eula">EULA</a> &middot; <a href="/support">Support</a></p>`, "text/html; charset=utf-8");
+    return send(res, 200, `<!doctype html><meta charset="utf-8"><title>Agent Guardrail Monitor</title><h1>Agent Guardrail Monitor</h1><p>Detect, prove, and repair AI coding-agent guardrail regressions.</p><p>Default repair behavior creates a verified repair branch and pull request; auto-merge is explicit opt-in.</p><p><a href="https://github.com/apps/agent-guardrail-monitor">Install GitHub App</a> &middot; <a href="${REPO_URL}">Repository</a> &middot; <a href="/setup">Setup</a> &middot; <a href="/privacy">Privacy</a> &middot; <a href="/terms">Terms</a> &middot; <a href="/eula">EULA</a> &middot; <a href="/support">Support</a></p>`, "text/html; charset=utf-8");
   }
 
   if (req.method !== "POST" || url.pathname !== "/webhook") {
