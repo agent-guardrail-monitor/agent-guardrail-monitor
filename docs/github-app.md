@@ -12,11 +12,18 @@ https://github.com/apps/agent-guardrail-monitor
 - **Metadata:** Read-only
 - **Checks:** Read and write
 
-## Event subscription
+## Event subscriptions
+
+### GitHub App webhook
 
 - **Push**
+- **Check suite** when requested or rerequested
 
-On each push, the App reads supported configuration files and publishes an **Agent Guardrail Monitor** check on the new commit.
+On each supported repository event, the App reads supported configuration files and can publish an **Agent Guardrail Monitor** check on the target commit.
+
+### GitHub Marketplace webhook
+
+The Marketplace listing must deliver `marketplace_purchase` events to the production `/webhook` endpoint. The server validates GitHub's webhook signature, accepts `purchased`, `changed`, and `cancelled` actions, and records only a minimal operational summary. Account login names and email addresses are deliberately excluded from that summary.
 
 ## Supported configuration surfaces
 
@@ -34,3 +41,22 @@ On each push, the App reads supported configuration files and publishes an **Age
 A missing proof is never promoted to PASS.
 
 The App does not request write access to repository contents.
+
+
+## Marketplace endpoints
+
+Production base URL: `https://agent-guardrail-monitor.onrender.com`
+
+- Setup URL: `/setup`
+- Privacy policy: `/privacy`
+- Terms: `/terms`
+- EULA: `/eula`
+- Support: `/support`
+- Webhook: `/webhook`
+- Health: `/health`
+
+The initial Marketplace plan is intended to be **Free**. Paid-plan handling is outside the current alpha scope and must not be enabled until billing behavior has separate validation.
+
+## Marketplace publication note
+
+The Marketplace listing itself is configured in GitHub's publisher interface. The production webhook URL, Setup URL, legal/support URLs, plan, listing copy, images, and publisher contact information must be attached to the **Agent Guardrail Monitor** GitHub App before requesting publication.
