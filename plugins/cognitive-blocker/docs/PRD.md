@@ -1,7 +1,7 @@
 # PRD — Cognitive Blocker Plugin
 
 Status: canonical internal product contract  
-Version: 2026-09-23.4
+Version: 2026-09-24.5
 
 ## 1. Purpose
 
@@ -31,6 +31,10 @@ The AI remains responsible for reasoning, answering and executing. The plugin is
 18. The current user message has priority over recovered historical state.
 19. Explicit user turns may be stored as source data; assistant candidate turns are consolidated only after canonical ALLOW.
 20. Blocked candidate content must never become accepted conversation history merely because the model produced it.
+21. Public installation authentication uses OAuth 2.1 Authorization Code + PKCE S256; no manual user API key is the public install path.
+22. OAuth tokens are bound to the canonical MCP resource and cognitive:use scope.
+23. Semantic classification may only emit IDs from the fixed canonical catalog.
+24. The product does not claim lifecycle coverage on host turns that never pass through the integration.
 
 ## 3. Functional modules
 
@@ -47,6 +51,9 @@ The AI remains responsible for reasoning, answering and executing. The plugin is
 - Chat-local episodic history with account-wide durable memory.
 - Automatic context rehydration before candidate generation.
 - Internal relevant-history retrieval for older turns in the same chat.
+- Portable plugin manifest, MCP package, Skill and Work/Codex hooks.
+- OAuth 2.1 install/link flow with PKCE and rotating refresh tokens.
+- Optional Semantic Guardian constrained to the fixed canonical rule catalog.
 - Automated unit, integration and conditional database E2E tests.
 
 ## 4. Success criteria
@@ -64,6 +71,8 @@ The plugin is considered technically ready only when:
 - conversation/turn tenant isolation tests pass;
 - ALWAYS_ON installation contract tests pass;
 - blocked-candidate non-persistence tests pass;
+- portable package contract tests pass;
+- OAuth PKCE/replay/refresh tests pass;
 - CI passes;
 - the intended PostgreSQL migration is applied;
 - a real authenticated database-backed E2E proves account A cannot read or write account B data;
