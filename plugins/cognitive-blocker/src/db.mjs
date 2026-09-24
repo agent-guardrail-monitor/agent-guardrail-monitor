@@ -5,8 +5,11 @@ import { validateFeatureChange } from "./feature-catalog.mjs";
 import { normalizeRole } from "./rbac.mjs";
 
 const { Pool } = pg;
+const databaseSsl = process.env.DATABASE_SSL === "false"
+  ? false
+  : { rejectUnauthorized: false };
 const pool = process.env.DATABASE_URL
-  ? new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } })
+  ? new Pool({ connectionString: process.env.DATABASE_URL, ssl: databaseSsl })
   : null;
 
 export function databaseConfigured() {
