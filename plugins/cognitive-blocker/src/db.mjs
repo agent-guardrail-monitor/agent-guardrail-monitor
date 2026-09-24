@@ -22,6 +22,22 @@ export async function query(text, params = []) {
   return pool.query(text, params);
 }
 
+export async function withDatabaseTransaction(operation) {
+  if (!pool) throw new Error("DATABASE_URL is not configured");
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const result = await operation(client);
+    await client.query("COMMIT");
+    return result;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export async function withAccountContext(accountId, operation) {
   if (!pool) throw new Error("DATABASE_URL is not configured");
   if (!accountId) throw new Error("account_id_required");
@@ -88,7 +104,9 @@ export async function resolveInstanceToken(token) {
             a.platform, a.external_account_ref
        FROM cognitive_instances i
        JOIN cognitive_accounts a ON a.id = i.account_id
-       WHERE i.token_hash = $1 AND i.status = 'ACTIVE'`,
+       WHERE i.token_hash = $1
+         AND i.status = 'ACTIVE'
+         AND (i.access_token_expires_at IS NULL OR i.access_token_expires_at > now())`,
     [hashToken(token)]
   );
   const row = result.rows[0];
