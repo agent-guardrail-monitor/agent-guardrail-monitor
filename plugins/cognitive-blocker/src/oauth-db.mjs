@@ -93,6 +93,7 @@ export async function redeemAuthorizationCode(input) {
     const row = result.rows[0];
     if (!row) return null;
     if (row.redirect_uri !== input.redirectUri) return null;
+    if ((row.resource || null) !== (input.resource || null)) return null;
     if (!safeEqual(row.code_challenge, challengeFor(input.codeVerifier))) return null;
 
     await client.query(
@@ -107,16 +108,28 @@ export async function redeemAuthorizationCode(input) {
 
     await client.query(
       `INSERT INTO cognitive_instances
-         (account_id, token_hash, ruleset_version, role, status, access_token_expires_at)
-       VALUES ($1,$2,$3,'OWNER','ACTIVE',now() + ($4 * interval '1 second'))
+         (account_id, token_hash, ruleset_version, role, status, access_token_expires_at,
+          oauth_client_id, oauth_scope, oauth_resource)
+       VALUES ($1,$2,$3,'OWNER','ACTIVE',now() + ($4 * interval '1 second'),$5,$6,$7)
        ON CONFLICT(account_id)
        DO UPDATE SET token_hash = EXCLUDED.token_hash,
                      ruleset_version = EXCLUDED.ruleset_version,
                      role = 'OWNER',
                      status = 'ACTIVE',
                      access_token_expires_at = EXCLUDED.access_token_expires_at,
+                     oauth_client_id = EXCLUDED.oauth_client_id,
+                     oauth_scope = EXCLUDED.oauth_scope,
+                     oauth_resource = EXCLUDED.oauth_resource,
                      updated_at = now()`,
-      [row.account_id, hashToken(accessToken), RULESET_VERSION, ACCESS_TOKEN_TTL_SECONDS]
+      [
+        row.account_id,
+        hashToken(accessToken),
+        RULESET_VERSION,
+        ACCESS_TOKEN_TTL_SECONDS,
+        row.client_id,
+        row.scope || "",
+        row.resource || null
+      ]
     );
 
     await client.query(
@@ -176,9 +189,20 @@ export async function refreshOAuthAccessToken(input) {
            role = 'OWNER',
            status = 'ACTIVE',
            access_token_expires_at = now() + ($4 * interval '1 second'),
+           oauth_client_id = $5,
+           oauth_scope = $6,
+           oauth_resource = $7,
            updated_at = now()
        WHERE account_id = $1`,
-      [row.account_id, hashToken(accessToken), RULESET_VERSION, ACCESS_TOKEN_TTL_SECONDS]
+      [
+        row.account_id,
+        hashToken(accessToken),
+        RULESET_VERSION,
+        ACCESS_TOKEN_TTL_SECONDS,
+        row.client_id,
+        row.scope || "",
+        row.resource || null
+      ]
     );
 
     await client.query(
