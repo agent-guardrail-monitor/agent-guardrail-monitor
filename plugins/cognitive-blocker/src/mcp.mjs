@@ -66,6 +66,10 @@ export function buildCognitiveBlockerMcpServer(context) {
       description: "Returns the fixed ruleset identity and internal control-plane status.",
       inputSchema: z.object({}),
       securitySchemes: oauthSchemes,
+      _meta: {
+        securitySchemes: oauthSchemes,
+        "openai/profile": true
+      },
       annotations: readOnly
     },
     async () => {
@@ -154,7 +158,7 @@ export function buildCognitiveBlockerMcpServer(context) {
       title: "Begin account chat turn",
       description: "Internal ALWAYS_ON turn bootstrap. Auto-registers the chat, persists the explicit user turn, and rehydrates chat-local history plus account/project memory before generation.",
       inputSchema: z.object({
-        platformConversationRef: z.string().min(1).max(500),
+        platformConversationRef: z.string().min(1).max(500).optional(),
         userMessage: z.string().max(20000).optional(),
         userTurnRef: z.string().max(500).optional(),
         projectId: z.string().uuid().optional(),
@@ -167,9 +171,13 @@ export function buildCognitiveBlockerMcpServer(context) {
       securitySchemes: oauthSchemes,
       annotations: writeInternal
     },
-    async (input) => {
+    async (input, context = {}) => {
       authorize(role, PERMISSIONS.GUARD_CHECK);
-      return response(await beginAccountTurn(accountId, input));
+      const hostSession = context?._meta?.["openai/session"];
+      return response(await beginAccountTurn(accountId, {
+        ...input,
+        platformConversationRef: input.platformConversationRef || hostSession
+      }));
     }
   );
 
@@ -185,10 +193,14 @@ export function buildCognitiveBlockerMcpServer(context) {
       securitySchemes: oauthSchemes,
       annotations: readOnly
     },
-    async ({ payload, recoverySessionId }) => {
+    async ({ payload, recoverySessionId }, context = {}) => {
       authorize(role, PERMISSIONS.GUARD_CHECK);
+      const hostSession = context?._meta?.["openai/session"];
       return response(await evaluateForAccount(accountId, {
         ...payload,
+        ...(payload.platformConversationRef || !hostSession
+          ? {}
+          : { platformConversationRef: hostSession }),
         recoverySessionId: recoverySessionId || payload.recoverySessionId || null
       }));
     }
