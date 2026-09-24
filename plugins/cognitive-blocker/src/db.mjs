@@ -101,6 +101,7 @@ export async function resolveInstanceToken(token) {
   const result = await pool.query(
     `SELECT i.id AS instance_id, i.account_id, i.role,
             i.activation_mode, i.auto_register_conversations,
+            i.oauth_client_id, i.oauth_scope, i.oauth_resource,
             a.platform, a.external_account_ref
        FROM cognitive_instances i
        JOIN cognitive_accounts a ON a.id = i.account_id
