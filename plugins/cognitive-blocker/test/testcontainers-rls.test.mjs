@@ -40,6 +40,7 @@ maybeTest("Testcontainers: real PostgreSQL enforces cross-tenant RLS", { timeout
     await adminPool.query(readMigration("002_internal_control_plane.sql"));
     await adminPool.query(readMigration("003_recovery_sessions.sql"));
     await adminPool.query(readMigration("004_account_wide_conversations.sql"));
+    await adminPool.query(readMigration("005_oauth21.sql"));
 
     await adminPool.query(`CREATE ROLE ${appRole} LOGIN PASSWORD '${appPassword}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS`);
     await adminPool.query(`GRANT USAGE ON SCHEMA public TO ${appRole}`);
@@ -232,6 +233,111 @@ maybeTest("Testcontainers: real PostgreSQL enforces cross-tenant RLS", { timeout
       await appPool.end();
     }
   } finally {
+    await adminPool.end().catch(() => {});
+    await container.stop().catch(() => {});
+  }
+});
+
+
+maybeTest("Testcontainers: OAuth authorization code and refresh tokens are replay-safe", { timeout: 180_000 }, async () => {
+  const container = await new PostgreSqlContainer("postgres:16-alpine")
+    .withDatabase("cognitive_oauth")
+    .withUsername("postgres")
+    .withPassword("postgres")
+    .start();
+
+  const adminPool = new Pool({
+    connectionString: container.getConnectionUri(),
+    max: 2
+  });
+
+  try {
+    for (const migration of [
+      "001_init.sql",
+      "002_internal_control_plane.sql",
+      "003_recovery_sessions.sql",
+      "004_account_wide_conversations.sql",
+      "005_oauth21.sql"
+    ]) {
+      await adminPool.query(readMigration(migration));
+    }
+
+    process.env.DATABASE_URL = container.getConnectionUri();
+    process.env.DATABASE_SSL = "false";
+
+    const oauth = await import("../src/oauth-db.mjs?oauth-e2e=" + Date.now());
+    const db = await import("../src/db.mjs");
+
+    try {
+      const client = await oauth.registerOAuthClient({
+        redirectUris: ["https://chatgpt.com/connector_platform_oauth_redirect"],
+        clientName: "ChatGPT test"
+      });
+
+      const account = await oauth.ensureOAuthAccount("oauth:test-install", "OAuth E2E");
+      const verifier = "v".repeat(64);
+      const challenge = crypto.createHash("sha256").update(verifier).digest("base64url");
+      const resource = "https://cognitive-blocker-plugin.onrender.com/mcp";
+
+      const code = await oauth.createAuthorizationCode({
+        clientId: client.client_id,
+        accountId: account.id,
+        redirectUri: client.redirect_uris[0],
+        codeChallenge: challenge,
+        scope: "cognitive:use",
+        resource
+      });
+
+      const first = await oauth.redeemAuthorizationCode({
+        code,
+        clientId: client.client_id,
+        redirectUri: client.redirect_uris[0],
+        codeVerifier: verifier,
+        resource
+      });
+
+      assert.ok(first?.accessToken);
+      assert.ok(first?.refreshToken);
+      assert.equal(first.scope, "cognitive:use");
+      assert.equal(first.resource, resource);
+
+      const resolvedFirst = await db.resolveInstanceToken(first.accessToken);
+      assert.equal(resolvedFirst.account_id, account.id);
+      assert.equal(resolvedFirst.oauth_resource, resource);
+      assert.equal(resolvedFirst.oauth_scope, "cognitive:use");
+
+      const replay = await oauth.redeemAuthorizationCode({
+        code,
+        clientId: client.client_id,
+        redirectUri: client.redirect_uris[0],
+        codeVerifier: verifier,
+        resource
+      });
+      assert.equal(replay, null);
+
+      const refreshed = await oauth.refreshOAuthAccessToken({
+        refreshToken: first.refreshToken,
+        clientId: client.client_id,
+        resource
+      });
+      assert.ok(refreshed?.accessToken);
+      assert.notEqual(refreshed.accessToken, first.accessToken);
+
+      assert.equal(await db.resolveInstanceToken(first.accessToken), null);
+      assert.equal((await db.resolveInstanceToken(refreshed.accessToken)).account_id, account.id);
+
+      const refreshReplay = await oauth.refreshOAuthAccessToken({
+        refreshToken: first.refreshToken,
+        clientId: client.client_id,
+        resource
+      });
+      assert.equal(refreshReplay, null);
+    } finally {
+      await db.closeDatabase();
+    }
+  } finally {
+    delete process.env.DATABASE_URL;
+    delete process.env.DATABASE_SSL;
     await adminPool.end().catch(() => {});
     await container.stop().catch(() => {});
   }
