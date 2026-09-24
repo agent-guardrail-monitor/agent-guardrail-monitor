@@ -1,0 +1,20 @@
+{
+  "name": "bloqueando-alucinacoes",
+  "interface": {
+    "displayName": "Bloqueando Alucinações"
+  },
+  "plugins": [
+    {
+      "name": "bloqueando-alucinacoes",
+      "source": {
+        "source": "local",
+        "path": "./plugins/cognitive-blocker"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
