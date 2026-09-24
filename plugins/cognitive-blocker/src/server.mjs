@@ -45,6 +45,16 @@ function sendHtml(res, status, body) {
   res.end(body);
 }
 
+function sendText(res, status, body) {
+  const textBody = String(body || "");
+  res.writeHead(status, {
+    "content-type": "text/plain; charset=utf-8",
+    "content-length": Buffer.byteLength(textBody),
+    "cache-control": "no-store"
+  });
+  res.end(textBody);
+}
+
 async function readJson(req, limit = 1024 * 1024) {
   let total = 0;
   const chunks = [];
@@ -134,6 +144,13 @@ const server = http.createServer(async (req, res) => {
 
   try {
     url = new URL(req.url, "http://localhost");
+
+    if (req.method === "GET" && url.pathname === "/.well-known/openai-apps-challenge") {
+      const challenge = String(process.env.OPENAI_APPS_CHALLENGE || "").trim();
+      return challenge
+        ? sendText(res, 200, challenge)
+        : sendText(res, 404, "challenge_not_configured");
+    }
 
     if (req.method === "GET") {
       const page = publicPage(url.pathname);
