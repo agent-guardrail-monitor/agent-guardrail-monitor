@@ -23,6 +23,7 @@ import { beginAccountTurn } from "./context-rehydration.mjs";
 import { handleOAuthRequest, oauthChallenge } from "./oauth-router.mjs";
 import { oauthConfigured, publicBaseUrl } from "./oauth.mjs";
 import { publicPage } from "./public-pages.mjs";
+import { semanticGuardianConfigured } from "./semantic-guardian.mjs";
 
 const PORT = Number(process.env.PORT || 10000);
 const HOST = "0.0.0.0";
@@ -359,6 +360,9 @@ server.listen(PORT, HOST, () => {
     host: HOST,
     port: PORT,
     version: "0.5.0",
-    rulesetVersion: RULESET_VERSION
+    rulesetVersion: RULESET_VERSION,
+    databaseConfigured: databaseConfigured(),
+    oauthConfigured: oauthConfigured(),
+    semanticGuardianConfigured: semanticGuardianConfigured()
   }));
 });
