@@ -22,6 +22,7 @@ import { RECOVERY_MAX_ATTEMPTS } from "./recovery.mjs";
 import { beginAccountTurn } from "./context-rehydration.mjs";
 import { handleOAuthRequest, oauthChallenge } from "./oauth-router.mjs";
 import { oauthConfigured, publicBaseUrl } from "./oauth.mjs";
+import { publicPage } from "./public-pages.mjs";
 
 const PORT = Number(process.env.PORT || 10000);
 const HOST = "0.0.0.0";
@@ -34,6 +35,14 @@ function send(res, status, body) {
     "content-length": Buffer.byteLength(data)
   });
   res.end(data);
+}
+
+function sendHtml(res, status, body) {
+  res.writeHead(status, {
+    "content-type": "text/html; charset=utf-8",
+    "content-length": Buffer.byteLength(body)
+  });
+  res.end(body);
 }
 
 async function readJson(req, limit = 1024 * 1024) {
@@ -125,6 +134,11 @@ const server = http.createServer(async (req, res) => {
 
   try {
     url = new URL(req.url, "http://localhost");
+
+    if (req.method === "GET") {
+      const page = publicPage(url.pathname);
+      if (page) return sendHtml(res, 200, page);
+    }
 
     if (req.method === "GET" && url.pathname === "/health") {
       return send(res, 200, {
