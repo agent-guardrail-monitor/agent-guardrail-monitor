@@ -126,7 +126,7 @@ export function readConsentTicket(ticket) {
   return payload;
 }
 
-export function validateAuthorizationRequest(searchParams, client) {
+export function validateAuthorizationRequest(searchParams, client, expectedResource) {
   const responseType = String(searchParams.get("response_type") || "");
   const clientId = String(searchParams.get("client_id") || "");
   const redirectUri = String(searchParams.get("redirect_uri") || "");
@@ -143,6 +143,7 @@ export function validateAuthorizationRequest(searchParams, client) {
   }
   if (!codeChallenge || codeChallengeMethod !== "S256") return { error: "invalid_request" };
   if (!scope) return { error: "invalid_scope" };
+  if (!resource || resource !== expectedResource) return { error: "invalid_target" };
 
   return {
     value: {
@@ -187,7 +188,8 @@ export function authorizationServerMetadata(baseUrl) {
     response_types_supported: ["code"],
     grant_types_supported: ["authorization_code", "refresh_token"],
     code_challenge_methods_supported: ["S256"],
-    token_endpoint_auth_methods_supported: ["none"]
+    token_endpoint_auth_methods_supported: ["none"],
+    authorization_response_iss_parameter_supported: true
   };
 }
 
