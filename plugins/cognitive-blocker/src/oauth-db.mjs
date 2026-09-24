@@ -171,6 +171,7 @@ export async function refreshOAuthAccessToken(input) {
 
     const row = result.rows[0];
     if (!row) return null;
+    if ((row.resource || null) !== (input.resource || null)) return null;
 
     await client.query(
       `UPDATE cognitive_oauth_refresh_tokens
