@@ -15,6 +15,15 @@ test("portable plugin package has exact v0.5 identity and remote MCP", () => {
   assert.equal(plugin.version, "0.5.0");
   assert.equal(plugin.extensions["com.openai"].hooks, "./hooks/hooks.json");
   assert.equal(plugin.extensions["com.openai"].interface.displayName, "Bloqueando Alucinações");
+  assert.ok(plugin.extensions["com.openai"].interface.shortDescription.length <= 30);
+  assert.equal(plugin.extensions["com.openai"].interface.logo, "./assets/logo.svg");
+  assert.equal(plugin.extensions["com.openai"].interface.composerIcon, "./assets/icon.svg");
+  assert.equal(
+    plugin.extensions["com.openai"].interface.supportURL,
+    "https://cognitive-blocker-plugin.onrender.com/support"
+  );
+  assert.ok(read("assets/logo.svg").includes("<svg"));
+  assert.ok(read("assets/icon.svg").includes("<svg"));
 
   assert.equal(mcp.$schema, "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json");
   assert.deepEqual(mcp.mcpServers["cognitive-blocker"], {
@@ -47,4 +56,13 @@ test("skill requires controlled preflight and recheck without activation chatter
   assert.match(skill, /cognitive_blocker_check/);
   assert.match(skill, /SAFE_STOP/);
   assert.match(skill, /Do not add activation chatter/);
+});
+
+
+test("public package exposes support and OpenAI domain-verification challenge route", () => {
+  const pages = read("src/public-pages.mjs");
+  const server = read("src/server.mjs");
+  assert.match(pages, /pathname === "\/support"/);
+  assert.match(server, /\/\.well-known\/openai-apps-challenge/);
+  assert.match(server, /OPENAI_APPS_CHALLENGE/);
 });
