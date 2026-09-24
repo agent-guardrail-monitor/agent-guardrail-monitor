@@ -2,7 +2,7 @@
 
 Internal account-scoped cognitive control layer for ChatGPT, Claude, Gemini and compatible AI runtimes.
 
-Current package version: **0.4.0**  
+Current package version: **0.5.0**  
 Canonical ruleset: **2026-09-23.1**
 
 ## Product contract
@@ -33,6 +33,41 @@ See:
 8. Automated unit, integration and conditional database E2E tests.
 
 No external RBAC provider, feature-flag service, error tracker or monitoring SaaS is required by these controls.
+
+## Installable plugin package
+
+The repository now contains a portable Agent Plugins package:
+
+- `plugin.json` — portable plugin identity and OpenAI listing metadata;
+- `mcp.json` — remote Streamable HTTP MCP endpoint;
+- `skills/bloqueando-alucinacoes/SKILL.md` — controlled workflow instructions;
+- `hooks/hooks.json` — Work/Codex lifecycle hooks;
+- `.codex-plugin/plugin.json` — compatibility overlay.
+
+Public install authentication uses OAuth 2.1 Authorization Code + PKCE S256 with Dynamic Client Registration.
+
+OAuth endpoints:
+
+- `GET /.well-known/oauth-protected-resource`
+- `GET /.well-known/oauth-authorization-server`
+- `POST /oauth/register`
+- `GET/POST /oauth/authorize`
+- `POST /oauth/token`
+
+Access tokens are bound to client, scope, resource and expiration. Authorization codes and refresh tokens are one-time/replay-safe.
+
+## Semantic Guardian
+
+Work/Codex `Stop` validation can use the internal Semantic Guardian to classify a raw candidate into the fixed 59 canonical rule IDs.
+
+The Guardian:
+
+- cannot create new blocker IDs;
+- filters unknown IDs;
+- supplies semantic signals to the existing canonical engine;
+- fails closed in the packaged Stop lifecycle when semantic validation cannot be proven.
+
+The Guardian code is present but remains **unconfigured until an `OPENAI_API_KEY` is explicitly supplied**. No paid API usage is activated by the repository alone.
 
 ## ALWAYS_ON account operation
 
@@ -314,6 +349,7 @@ Apply in order:
 2. `sql/002_internal_control_plane.sql`
 3. `sql/003_recovery_sessions.sql`
 4. `sql/004_account_wide_conversations.sql`
+5. `sql/005_oauth21.sql`
 
 The second migration adds:
 
@@ -327,7 +363,9 @@ The third migration adds tenant-isolated controlled recovery sessions with a fix
 
 The fourth migration adds account-wide ALWAYS_ON installation state, auto-registered conversations, accepted chat turns, deterministic turn positions, internal full-text retrieval and forced RLS for both conversations and turns.
 
-These migrations are prepared but the real Neon database E2E remains pending until the approved Neon connection is available.
+The fifth migration adds OAuth clients, PKCE authorization codes, rotating refresh tokens and access-token audience/scope/expiry state.
+
+All five migrations pass against disposable PostgreSQL in CI. The definitive Neon application remains pending because the connected Neon tool currently rejects `project_id` while its backend requires it; no production Neon database has been modified.
 
 ## Premium quality gates
 
@@ -374,7 +412,18 @@ The plugin is not marked production-complete until all of the following are veri
 
 1. code syntax checks pass;
 2. automated test suite passes;
-3. all four database migrations are applied to the intended database;
+3. all five database migrations are applied to the intended database;
 4. real PostgreSQL RLS E2E proves account A cannot access account B;
 5. Render health returns 200;
 6. authenticated ALLOW/BLOCK behavior passes against the real database.
+
+
+## Platform enforcement boundary
+
+The portable package can be installed and its MCP/OAuth contract is implemented. Coverage still depends on the host lifecycle:
+
+- ChatGPT tool calls expose an anonymized `_meta["openai/session"]` used automatically for chat correlation.
+- Work/Codex can load the packaged `UserPromptSubmit`, `PreToolUse` and `Stop` hooks.
+- Ordinary Chat does not provide the same mandatory lifecycle-hook guarantee.
+- MCP-tool hook transport failures are host fail-open behavior; this package does not claim otherwise.
+- A true zero-leak pre-release gate requires a host that buffers the candidate before user-visible release.
