@@ -1,0 +1,8 @@
+{
+  "name": "bloqueando-alucinacoes",
+  "version": "0.5.0",
+  "description": "Cognitive blocker with protected memory and controlled recovery.",
+  "skills": "./skills/",
+  "mcpServers": "./mcp.json",
+  "hooks": "./hooks/hooks.json"
+}
