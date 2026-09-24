@@ -20,6 +20,8 @@ import { buildInternalErrorReport } from "./internal-errors.mjs";
 import { assertPermission, PERMISSIONS, permissionMatrix } from "./rbac.mjs";
 import { RECOVERY_MAX_ATTEMPTS } from "./recovery.mjs";
 import { beginAccountTurn } from "./context-rehydration.mjs";
+import { handleOAuthRequest, oauthChallenge } from "./oauth-router.mjs";
+import { oauthConfigured, publicBaseUrl } from "./oauth.mjs";
 
 const PORT = Number(process.env.PORT || 10000);
 const HOST = "0.0.0.0";
@@ -52,11 +54,37 @@ function bearer(req) {
 }
 
 async function authenticated(req, res) {
+  const baseUrl = publicBaseUrl(req);
   const instance = await resolveInstanceToken(bearer(req));
   if (!instance) {
-    send(res, 401, { error: "invalid_instance_token" });
+    res.setHeader("www-authenticate", oauthChallenge(baseUrl));
+    send(res, 401, { error: "authentication_required" });
     return null;
   }
+
+  if (instance.oauth_resource && instance.oauth_resource !== baseUrl + "/mcp") {
+    res.setHeader("www-authenticate", oauthChallenge(
+      baseUrl,
+      "invalid_token",
+      "The access token was issued for another resource."
+    ));
+    send(res, 401, { error: "invalid_token_resource" });
+    return null;
+  }
+
+  if (
+    instance.oauth_scope &&
+    !String(instance.oauth_scope).split(/\s+/).includes("cognitive:use")
+  ) {
+    res.setHeader("www-authenticate", oauthChallenge(
+      baseUrl,
+      "insufficient_scope",
+      "The cognitive:use scope is required."
+    ));
+    send(res, 403, { error: "insufficient_scope" });
+    return null;
+  }
+
   return instance;
 }
 
@@ -102,15 +130,18 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, {
         ok: true,
         product: "Cognitive Blocker Plugin",
-        version: "0.4.0",
+        version: "0.5.0",
         rulesetVersion: RULESET_VERSION,
         canonicalRuleCount: RULE_CATALOG.length,
         recoveryMaxAttempts: RECOVERY_MAX_ATTEMPTS,
         activationMode: "ALWAYS_ON",
         autoRegisterConversations: true,
+        oauthConfigured: oauthConfigured(),
         databaseConfigured: databaseConfigured()
       });
     }
+
+    if (await handleOAuthRequest(req, res, url)) return;
 
     if (req.method === "POST" && url.pathname === "/v1/install") {
       if (!process.env.INSTALL_SECRET || req.headers["x-install-secret"] !== process.env.INSTALL_SECRET) {
@@ -145,7 +176,7 @@ const server = http.createServer(async (req, res) => {
       const overrides = await listFeatureFlags(instance.account_id);
       return send(res, 200, {
         product: "Cognitive Blocker Plugin",
-        version: "0.4.0",
+        version: "0.5.0",
         role: instance.role,
         accountScoped: true,
         rulesetVersion: RULESET_VERSION,
@@ -253,7 +284,7 @@ const server = http.createServer(async (req, res) => {
         requestId
       });
     }
-    if (["UNKNOWN_FEATURE","REQUIRED_FEATURE","REQUEST_TOO_LARGE","PLATFORM_CONVERSATION_REF_REQUIRED","TURN_KEY_REQUIRED"].includes(error.code)) {
+    if (["UNKNOWN_FEATURE","REQUIRED_FEATURE","REQUEST_TOO_LARGE","PLATFORM_CONVERSATION_REF_REQUIRED","TURN_KEY_REQUIRED","OAUTH_NOT_CONFIGURED"].includes(error.code)) {
       return send(res, 400, { error: error.code.toLowerCase(), requestId });
     }
 
@@ -296,7 +327,7 @@ server.listen(PORT, HOST, () => {
     event: "cognitive_blocker_started",
     host: HOST,
     port: PORT,
-    version: "0.4.0",
+    version: "0.5.0",
     rulesetVersion: RULESET_VERSION
   }));
 });
