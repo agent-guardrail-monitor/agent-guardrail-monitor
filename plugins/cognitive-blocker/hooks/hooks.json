@@ -1,0 +1,63 @@
+{
+  "description": "Cognitive Blocker lifecycle enforcement for ChatGPT Work/Codex.",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "mcp_tool",
+            "server": "cognitive-blocker",
+            "tool": "cognitive_hook_user_prompt",
+            "input": {
+              "sessionId": "${session_id}",
+              "turnId": "${turn_id}",
+              "prompt": "${prompt}"
+            },
+            "timeout": 30,
+            "statusMessage": "Recuperando contexto protegido"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "mcp_tool",
+            "server": "cognitive-blocker",
+            "tool": "cognitive_hook_pre_tool",
+            "input": {
+              "sessionId": "${session_id}",
+              "turnId": "${turn_id}",
+              "toolName": "${tool_name}",
+              "toolUseId": "${tool_use_id}",
+              "toolInput": "${tool_input}"
+            },
+            "timeout": 30,
+            "statusMessage": "Verificando ação antes da execução"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "mcp_tool",
+            "server": "cognitive-blocker",
+            "tool": "cognitive_hook_stop",
+            "input": {
+              "sessionId": "${session_id}",
+              "turnId": "${turn_id}",
+              "stopHookActive": "${stop_hook_active}",
+              "lastAssistantMessage": "${last_assistant_message}"
+            },
+            "timeout": 45,
+            "statusMessage": "Validando resposta antes de concluir"
+          }
+        ]
+      }
+    ]
+  }
+}
