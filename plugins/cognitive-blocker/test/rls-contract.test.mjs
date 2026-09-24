@@ -5,7 +5,8 @@ import assert from "node:assert/strict";
 const sql = [
   fs.readFileSync(new URL("../sql/002_internal_control_plane.sql", import.meta.url), "utf8"),
   fs.readFileSync(new URL("../sql/003_recovery_sessions.sql", import.meta.url), "utf8"),
-  fs.readFileSync(new URL("../sql/004_account_wide_conversations.sql", import.meta.url), "utf8")
+  fs.readFileSync(new URL("../sql/004_account_wide_conversations.sql", import.meta.url), "utf8"),
+  fs.readFileSync(new URL("../sql/005_oauth21.sql", import.meta.url), "utf8")
 ].join("\n");
 
 const tenantTables = [
@@ -76,4 +77,16 @@ test("chat history is account-scoped and conversation-scoped", () => {
   assert.match(sql, /FOREIGN KEY \(conversation_id, account_id\)/);
   assert.match(sql, /REFERENCES cognitive_conversations\(id, account_id\)/);
   assert.match(sql, /accepted_source text NOT NULL CHECK \(accepted_source IN \('USER_EXPLICIT','ALLOW'\)\)/);
+});
+
+
+test("OAuth migration binds access tokens to client scope resource and expiry", () => {
+  assert.match(sql, /access_token_expires_at timestamptz/);
+  assert.match(sql, /oauth_client_id text/);
+  assert.match(sql, /oauth_scope text/);
+  assert.match(sql, /oauth_resource text/);
+  assert.match(sql, /CREATE TABLE IF NOT EXISTS cognitive_oauth_clients/);
+  assert.match(sql, /CREATE TABLE IF NOT EXISTS cognitive_oauth_authorization_codes/);
+  assert.match(sql, /CREATE TABLE IF NOT EXISTS cognitive_oauth_refresh_tokens/);
+  assert.match(sql, /code_challenge_method text NOT NULL DEFAULT 'S256'/);
 });
