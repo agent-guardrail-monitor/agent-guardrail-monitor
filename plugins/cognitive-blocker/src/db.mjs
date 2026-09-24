@@ -16,6 +16,10 @@ export function databaseConfigured() {
   return Boolean(pool);
 }
 
+export async function closeDatabase() {
+  if (pool) await pool.end();
+}
+
 export function hashToken(token) {
   return crypto.createHash("sha256").update(String(token)).digest("hex");
 }
