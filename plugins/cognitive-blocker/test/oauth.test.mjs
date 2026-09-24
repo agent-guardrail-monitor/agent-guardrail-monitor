@@ -45,8 +45,11 @@ test("installation identity cookie is signed and tamper-evident", () => {
   const identity = createInstallIdentity();
   const cookie = serializeIdentityCookie(identity);
   assert.equal(identityFromCookie(cookie), identity);
-  const tampered = cookie.replace(identity.slice(-4), "zzzz");
-  assert.equal(identityFromCookie(tampered), null);
+  const pair = cookie.split(";")[0];
+  const index = pair.indexOf("=");
+  const value = pair.slice(index + 1);
+  const tamperedValue = value.slice(0, -1) + (value.endsWith("a") ? "b" : "a");
+  assert.equal(identityFromCookie(pair.slice(0, index + 1) + tamperedValue), null);
 });
 
 test("consent tickets round-trip only while signed", () => {
