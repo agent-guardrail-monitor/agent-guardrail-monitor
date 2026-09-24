@@ -1,0 +1,48 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "bloqueando-alucinacoes",
+  "version": "0.5.0",
+  "description": "Corta respostas sem base, trava desvios do comando e preserva memória cognitiva validada.",
+  "author": {
+    "name": "Independente (Brasil)",
+    "url": "https://github.com/agent-guardrail-monitor/agent-guardrail-monitor"
+  },
+  "homepage": "https://cognitive-blocker-plugin.onrender.com",
+  "repository": "https://github.com/agent-guardrail-monitor/agent-guardrail-monitor",
+  "license": "MIT",
+  "keywords": [
+    "guardrails",
+    "memory",
+    "hallucinations",
+    "context",
+    "productivity",
+    "ai"
+  ],
+  "extensions": {
+    "com.openai": {
+      "hooks": "./hooks/hooks.json",
+      "interface": {
+        "displayName": "Bloqueando Alucinações",
+        "shortDescription": "Menos erros. Protege memória.",
+        "longDescription": "Bloqueia respostas sem base, corta desvios do seu comando e preserva contexto, decisões e informações essenciais para manter a continuidade.",
+        "developerName": "Independente (Brasil)",
+        "category": "Productivity",
+        "capabilities": [
+          "Read",
+          "Write"
+        ],
+        "websiteURL": "https://cognitive-blocker-plugin.onrender.com",
+        "privacyPolicyURL": "https://cognitive-blocker-plugin.onrender.com/privacy",
+        "termsOfServiceURL": "https://cognitive-blocker-plugin.onrender.com/terms",
+        "defaultPrompt": [
+          "Proteja esta conversa contra invenções, desvios e perda de contexto.",
+          "Use a memória validada desta instalação e mantenha a resposta dentro do meu comando."
+        ],
+        "brandColor": "#0B7A49",
+        "logo": "./assets/logo.svg",
+        "composerIcon": "./assets/icon.svg",
+        "supportURL": "https://cognitive-blocker-plugin.onrender.com/support"
+      }
+    }
+  }
+}

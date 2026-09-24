@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: cognitive-blocker-plugin
+    runtime: node
+    plan: free
+    rootDir: plugins/cognitive-blocker
+    buildCommand: npm install --omit=dev
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: INSTALL_SECRET
+        sync: false
+      - key: PUBLIC_BASE_URL
+        value: https://cognitive-blocker-plugin.onrender.com
+      - key: OAUTH_SIGNING_SECRET
+        generateValue: true
+      - key: OPENAI_APPS_CHALLENGE
+        sync: false
+      # Optional: set only when enabling the Semantic Guardian.
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: SEMANTIC_GUARDIAN_MODEL
+        value: gpt-4.1-mini
