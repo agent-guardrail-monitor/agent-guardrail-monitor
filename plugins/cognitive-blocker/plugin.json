@@ -23,7 +23,7 @@
       "hooks": "./hooks/hooks.json",
       "interface": {
         "displayName": "Bloqueando Alucinações",
-        "shortDescription": "Corta respostas falsas, trava desvios e protege sua memória",
+        "shortDescription": "Menos erros. Protege memória.",
         "longDescription": "Bloqueia respostas sem base, corta desvios do seu comando e preserva contexto, decisões e informações essenciais para manter a continuidade.",
         "developerName": "Independente (Brasil)",
         "category": "Productivity",
@@ -38,7 +38,10 @@
           "Proteja esta conversa contra invenções, desvios e perda de contexto.",
           "Use a memória validada desta instalação e mantenha a resposta dentro do meu comando."
         ],
-        "brandColor": "#0B7A49"
+        "brandColor": "#0B7A49",
+        "logo": "./assets/logo.svg",
+        "composerIcon": "./assets/icon.svg",
+        "supportURL": "https://cognitive-blocker-plugin.onrender.com/support"
       }
     }
   }
