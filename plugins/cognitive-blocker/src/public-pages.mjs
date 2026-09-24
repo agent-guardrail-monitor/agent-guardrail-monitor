@@ -46,6 +46,19 @@ export function publicPage(pathname) {
 `);
   }
 
+  if (pathname === "/support") {
+    return page("Suporte", `
+<p>Suporte do plugin Bloqueando Alucinações.</p>
+<h2>Instalação e conexão</h2>
+<p>Se a instalação, autenticação ou conexão MCP falhar, registre o erro com o horário aproximado, a plataforma utilizada e a etapa em que ocorreu.</p>
+<h2>Privacidade e dados</h2>
+<p>Solicitações sobre dados, memória cognitiva ou remoção de uma conexão podem ser abertas no repositório oficial do projeto.</p>
+<h2>Canal oficial</h2>
+<p><a href="https://github.com/agent-guardrail-monitor/agent-guardrail-monitor/issues">Abrir uma solicitação de suporte no GitHub</a></p>
+<p><a href="/privacy">Política de Privacidade</a> · <a href="/terms">Termos de Uso</a></p>
+`);
+  }
+
   if (pathname === "/terms") {
     return page("Termos de Uso", `
 <p>Bloqueando Alucinações é uma camada de controle para caminhos de IA tecnicamente integrados ao plugin.</p>
