@@ -15,6 +15,8 @@ import { isFeatureEnabled, resolveFeatures } from "./feature-catalog.mjs";
 import { buildInternalErrorReport } from "./internal-errors.mjs";
 import { assertPermission, PERMISSIONS, permissionMatrix } from "./rbac.mjs";
 import { beginAccountTurn } from "./context-rehydration.mjs";
+import { preToolHook, stopHook, userPromptHook } from "./hook-adapter.mjs";
+import { semanticGuardianConfigured } from "./semantic-guardian.mjs";
 
 function response(payload) {
   return {
@@ -37,6 +39,8 @@ const writeInternal = {
   idempotentHint: true
 };
 
+const oauthSchemes = [{ type: "oauth2", scopes: ["cognitive:use"] }];
+
 function authorize(role, permission) {
   assertPermission(role, permission);
 }
@@ -45,7 +49,7 @@ export function buildCognitiveBlockerMcpServer(context) {
   const accountId = context.accountId;
   const role = context.role;
   const server = new McpServer(
-    { name: "cognitive-blocker-plugin", version: "0.4.0" },
+    { name: "cognitive-blocker-plugin", version: "0.5.0" },
     {
       instructions:
         "This app is ALWAYS_ON for the installed account. For every new user turn in every controlled chat, automatically call cognitive_turn_begin before generating a candidate. The user must not be asked to activate or invoke the plugin. Then call cognitive_blocker_check before release or execution. " +
@@ -61,6 +65,7 @@ export function buildCognitiveBlockerMcpServer(context) {
       title: "Cognitive blocker status",
       description: "Returns the fixed ruleset identity and internal control-plane status.",
       inputSchema: z.object({}),
+      securitySchemes: oauthSchemes,
       annotations: readOnly
     },
     async () => {
@@ -68,16 +73,78 @@ export function buildCognitiveBlockerMcpServer(context) {
       const overrides = await listFeatureFlags(accountId);
       return response({
         product: "Cognitive Blocker Plugin",
-        version: "0.4.0",
+        version: "0.5.0",
         rulesetVersion: RULESET_VERSION,
         canonicalRuleCount: RULE_CATALOG.length,
         accountScoped: true,
         activationMode: "ALWAYS_ON",
         autoRegisterConversations: true,
+        semanticGuardianConfigured: semanticGuardianConfigured(),
         role,
         enforcementBoundary: "MANDATORY_PATHS_ONLY",
         features: resolveFeatures(overrides)
       });
+    }
+  );
+
+  server.registerTool(
+    "cognitive_hook_user_prompt",
+    {
+      title: "Lifecycle: user prompt submit",
+      description: "Work/Codex lifecycle adapter. Rehydrates this session before model generation and returns developer context.",
+      inputSchema: z.object({
+        sessionId: z.string().min(1).max(500),
+        turnId: z.string().max(500).optional(),
+        prompt: z.string().max(20000)
+      }),
+      securitySchemes: oauthSchemes,
+      annotations: writeInternal
+    },
+    async (input) => {
+      authorize(role, PERMISSIONS.GUARD_CHECK);
+      return response(await userPromptHook(accountId, input));
+    }
+  );
+
+  server.registerTool(
+    "cognitive_hook_pre_tool",
+    {
+      title: "Lifecycle: pre tool use",
+      description: "Work/Codex lifecycle adapter. Checks a pending local or MCP tool action before execution.",
+      inputSchema: z.object({
+        sessionId: z.string().min(1).max(500),
+        turnId: z.string().max(500).optional(),
+        toolName: z.string().min(1).max(500),
+        toolUseId: z.string().max(500).optional(),
+        toolInput: z.unknown().optional(),
+        destructiveAuthorized: z.boolean().optional()
+      }),
+      securitySchemes: oauthSchemes,
+      annotations: writeInternal
+    },
+    async (input) => {
+      authorize(role, PERMISSIONS.GUARD_CHECK);
+      return response(await preToolHook(accountId, input));
+    }
+  );
+
+  server.registerTool(
+    "cognitive_hook_stop",
+    {
+      title: "Lifecycle: stop validation",
+      description: "Work/Codex lifecycle adapter. Semantically validates the final candidate against the fixed 59 rules before accepting it as a valid turn.",
+      inputSchema: z.object({
+        sessionId: z.string().min(1).max(500),
+        turnId: z.string().max(500).optional(),
+        stopHookActive: z.boolean().optional(),
+        lastAssistantMessage: z.string().max(30000).nullable().optional()
+      }),
+      securitySchemes: oauthSchemes,
+      annotations: writeInternal
+    },
+    async (input) => {
+      authorize(role, PERMISSIONS.GUARD_CHECK);
+      return response(await stopHook(accountId, input));
     }
   );
 
@@ -97,6 +164,7 @@ export function buildCognitiveBlockerMcpServer(context) {
         recentLimit: z.number().int().min(4).max(60).optional(),
         relevantLimit: z.number().int().min(0).max(20).optional()
       }),
+      securitySchemes: oauthSchemes,
       annotations: writeInternal
     },
     async (input) => {
@@ -114,6 +182,7 @@ export function buildCognitiveBlockerMcpServer(context) {
         payload: z.record(z.string(), z.unknown()),
         recoverySessionId: z.string().uuid().optional()
       }),
+      securitySchemes: oauthSchemes,
       annotations: readOnly
     },
     async ({ payload, recoverySessionId }) => {
@@ -138,6 +207,7 @@ export function buildCognitiveBlockerMcpServer(context) {
         claimState: z.enum(["EVIDENCE","INFERENCE","HYPOTHESIS","ESTIMATE","UNKNOWN","REFUTED"]),
         source: z.string().max(500).optional()
       }),
+      securitySchemes: oauthSchemes,
       annotations: writeInternal
     },
     async (input) => {
@@ -152,6 +222,7 @@ export function buildCognitiveBlockerMcpServer(context) {
       title: "List relevant account memory",
       description: "Lists current memory for this authenticated account and optional project scope.",
       inputSchema: z.object({ projectId: z.string().uuid().optional() }),
+      securitySchemes: oauthSchemes,
       annotations: readOnly
     },
     async ({ projectId }) => {
@@ -166,6 +237,7 @@ export function buildCognitiveBlockerMcpServer(context) {
       title: "List internal plugin features",
       description: "Returns the internal feature catalog and this account's effective state.",
       inputSchema: z.object({}),
+      securitySchemes: oauthSchemes,
       annotations: readOnly
     },
     async () => {
@@ -183,6 +255,7 @@ export function buildCognitiveBlockerMcpServer(context) {
         feature: z.string().min(1).max(120),
         enabled: z.boolean()
       }),
+      securitySchemes: oauthSchemes,
       annotations: writeInternal
     },
     async ({ feature, enabled }) => {
@@ -204,6 +277,7 @@ export function buildCognitiveBlockerMcpServer(context) {
         context: z.record(z.string(), z.unknown()).optional(),
         requestFingerprint: z.string().max(256).optional()
       }),
+      securitySchemes: oauthSchemes,
       annotations: writeInternal
     },
     async (input) => {
@@ -223,6 +297,7 @@ export function buildCognitiveBlockerMcpServer(context) {
       title: "List internal plugin errors",
       description: "Lists recent internal error reports for this account only.",
       inputSchema: z.object({ limit: z.number().int().min(1).max(100).default(50) }),
+      securitySchemes: oauthSchemes,
       annotations: readOnly
     },
     async ({ limit }) => {
@@ -237,6 +312,7 @@ export function buildCognitiveBlockerMcpServer(context) {
       title: "Show internal permission matrix",
       description: "Returns the fixed internal RBAC permission matrix.",
       inputSchema: z.object({}),
+      securitySchemes: oauthSchemes,
       annotations: readOnly
     },
     async () => {
