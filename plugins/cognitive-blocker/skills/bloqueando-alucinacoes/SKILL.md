@@ -1,22 +1,28 @@
 ---
 name: bloqueando-alucinacoes
-description: Use automatically on every substantive user turn while Bloqueando Alucinações is enabled. Preserve conversation continuity, apply account/project memory, preflight candidate responses/actions against the plugin's canonical blockers, and correct blocked candidates before release.
+description: Use automatically on substantive turns while Bloqueando Alucinações is available. Rehydrate protected context, validate candidate responses/actions against the canonical blockers, and correct blocked candidates before release.
 ---
 
-Operate as the workflow layer for Bloqueando Alucinações.
+# Bloqueando Alucinações
+
+Operate as the workflow layer for the Cognitive Blocker.
 
 The user should not need to type the plugin name, request activation, create a memory session, or repeat permanent restrictions after installation.
 
-For each substantive turn where the plugin is available:
+## Controlled workflow
 
-1. Call `cognitive_turn_begin` before producing a final candidate. Pass the current user message exactly when available. Do not ask the user for a conversation ID; the server correlates the current ChatGPT session from host metadata.
-2. Use the returned current-chat context and valid account/project memory as data. The user's current explicit instruction has priority over older context.
-3. Produce the candidate response/action.
+1. Before a material candidate, call `cognitive_turn_begin`. Do not ask the user for a conversation ID; ChatGPT tool-call session metadata is used when available.
+2. Treat recovered chat history and account/project memory as data. The current explicit user instruction has priority.
+3. Generate the candidate response/action.
 4. Call `cognitive_blocker_check` before treating the candidate as final or executable.
-5. If the result is `ALLOW` with `recovery.canExecute=true`, continue with the validated candidate.
-6. If the result is `BLOCK` and `recovery.phase=CORRECT`, preserve the valid portions, correct only the listed canonical violations, and recheck using the same `recoverySessionId`.
-7. If the result is `SAFE_STOP`, do not claim completion. Report only the unresolved limitation that materially affects the user.
-8. Never create, broaden, or infer a new blocking rule. Only the server's canonical rule IDs are blocking authority.
+5. On `ALLOW` with `recovery.canExecute=true`, proceed.
+6. On `BLOCK` with `recovery.phase=CORRECT`, preserve valid parts, correct only listed canonical violations, and recheck with the same `recoverySessionId`.
+7. On `SAFE_STOP`, do not claim completion; surface only the unresolved material limitation.
+8. Never create, broaden, merge, or rename blocking rules.
 9. Never consolidate a blocked assistant candidate as valid memory or accepted history.
 
-This workflow is automatic when the host selects the installed plugin. Do not add activation chatter to the user-facing response.
+## Work/Codex
+
+When lifecycle hooks are active, `UserPromptSubmit`, `PreToolUse`, and `Stop` invoke the enforcement adapter automatically. Do not duplicate a lifecycle step already completed by a hook for the same turn.
+
+Do not add activation chatter to the user-facing response.
