@@ -1,7 +1,10 @@
 BEGIN;
 
 ALTER TABLE cognitive_instances
-  ADD COLUMN IF NOT EXISTS access_token_expires_at timestamptz;
+  ADD COLUMN IF NOT EXISTS access_token_expires_at timestamptz,
+  ADD COLUMN IF NOT EXISTS oauth_client_id text,
+  ADD COLUMN IF NOT EXISTS oauth_scope text,
+  ADD COLUMN IF NOT EXISTS oauth_resource text;
 
 CREATE TABLE IF NOT EXISTS cognitive_oauth_clients (
   client_id text PRIMARY KEY,
