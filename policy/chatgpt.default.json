@@ -16,16 +16,8 @@
       "status": "ACTIVE",
       "phase": "PRE_ACTION",
       "match": {
-        "runtime": [
-          "chatgpt-mcp"
-        ],
-        "tool": [
-          "Bash",
-          "bash",
-          "PowerShell",
-          "powershell",
-          "shell"
-        ],
+        "runtime": ["chatgpt-mcp"],
+        "tool": ["Bash", "bash", "PowerShell", "powershell", "shell"],
         "commandRegex": "(^|\\s)(rm\\s+-rf|Remove-Item\\s+.*-Recurse)(\\s|$)"
       },
       "effect": {
@@ -40,24 +32,12 @@
       "status": "ACTIVE",
       "phase": "PRE_ACTION",
       "match": {
-        "runtime": [
-          "chatgpt-mcp"
-        ],
-        "tool": [
-          "GitHub"
-        ],
-        "actionKind": [
-          "merge_pull_request"
-        ],
+        "runtime": ["chatgpt-mcp"],
+        "tool": ["GitHub"],
+        "actionKind": ["merge_pull_request"],
         "commandRegex": "PR #32.*150fbc02b8a58a52f7c5f08f26c2b5367e73a494.*deploy-v4-10-5-pronta",
         "objectiveRegex": "PR #32.*odomdowell2030-crypto/jurisboa.*deploy-v4-10-5-pronta",
-        "taskLabels": [
-          "jurisboa",
-          "PR-32",
-          "production",
-          "verified-fix",
-          "user-approved"
-        ]
+        "taskLabels": ["jurisboa", "PR-32", "production", "verified-fix", "user-approved"]
       },
       "effect": {
         "type": "REQUIRE_SKILL",
