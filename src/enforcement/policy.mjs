@@ -64,7 +64,7 @@ function githubPrBoundToObjective(action, objective) {
   return text.includes(repository) && new RegExp("\\bPR\\s*#?\\s*" + number + "\\b", "i").test(text);
 }
 
-function matches(rule, context) {
+function matches(rule, context, { ignoreTaskLabels = false } = {}) {
   const match = rule.match || {};
   const action = context.action || {};
   const task = context.task || {};
@@ -76,7 +76,7 @@ function matches(rule, context) {
   if (match.bindGithubPrToObjective === true && !githubPrBoundToObjective(action, task.originalObjective || task.objective)) return false;
 
   const requiredLabels = list(match.taskLabels);
-  if (requiredLabels.length) {
+  if (requiredLabels.length && !ignoreTaskLabels) {
     const labels = new Set(list(task.labels));
     if (!requiredLabels.every((label) => labels.has(label))) return false;
   }
@@ -213,6 +213,27 @@ export function evaluatePolicy(policy, context = {}) {
     return (rule.status || "ACTIVE") === "ACTIVE" && (rulePhase === "ANY" || rulePhase === phase);
   });
   const matched = active.filter((rule) => matches(rule, context));
+  if (!matched.length && strict && context.action?.critical === true) {
+    const evidenceGaps = active
+      .filter((rule) => matches(rule, context, { ignoreTaskLabels: true }))
+      .map((rule) => ({
+        id: rule.id,
+        missing: list(rule.match?.taskLabels).filter(
+          (label) => !list(context.task?.labels).includes(label)
+        )
+      }))
+      .filter((item) => item.missing.length > 0);
+    if (evidenceGaps.length) {
+      const missing = [...new Set(evidenceGaps.flatMap((item) => item.missing))];
+      return {
+        decision: VERDICTS.BLOCK,
+        matchedRuleIds: evidenceGaps.map((item) => item.id),
+        reasons: missing.map((label) => "Required verification evidence is missing: " + label),
+        policyHash: hashObject(policy),
+        code: "REQUIRED_VERIFICATION_MISSING"
+      };
+    }
+  }
   const conflict = detectMandatoryConflict(matched);
 
   if (conflict) {
