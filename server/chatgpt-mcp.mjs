@@ -365,7 +365,7 @@ export function buildAgmMcpServer(context = {}) {
           input.availableTools,
           input.forbiddenTools
         ),
-        availableTools: input.availableTools
+        availableTools: input.availableTools.map(canonicalToolId)
       });
 
       return response({
