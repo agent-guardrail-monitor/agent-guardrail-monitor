@@ -318,7 +318,7 @@ test("Lunna merge still requires tenant-isolation verification", async () => {
       }
     });
     assert.equal(result.result.structuredContent.decision, "BLOCK");
-    assert.equal(result.result.structuredContent.code, "CRITICAL_UNMATCHED");
+    assert.equal(result.result.structuredContent.code, "REQUIRED_VERIFICATION_MISSING");
   });
 });
 
