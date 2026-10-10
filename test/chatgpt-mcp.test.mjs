@@ -256,7 +256,7 @@ test("a direct repo-scoped Guardrail repair order does not require an individual
       }
     });
     const decision = result.result.structuredContent;
-    assert.equal(decision.decision, "ALLOW");
+    assert.equal(decision.decision, "ALLOW", JSON.stringify(decision));
     assert.equal(decision.code, "POLICY_ALLOW");
     assert.equal(decision.providerAuthorization.status, "NOT_CHECKED_BY_AGM");
     assert.equal(decision.executionPerformed, false);
