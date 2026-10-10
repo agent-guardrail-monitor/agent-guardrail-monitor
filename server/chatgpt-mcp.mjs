@@ -55,10 +55,14 @@ function ownerOrderAuthorizesMerge(ownerOrder, repository, prNumber) {
     .toLowerCase();
   const repo = String(repository || "").toLowerCase();
   const number = String(prNumber || "");
-  const scoped = text.includes(repo) &&
-    new RegExp("\\bpr\\s*#?\\s*" + number + "\\b", "i").test(text);
-  const affirmative = /\b(merge|mergear|mesclar|incorporar|integrar)\b/i.test(text);
-  const negated = /\b(?:nao|nunca|never|do not|dont)\s+(?:(?:o|a|the|pr|pull request)\s+){0,3}(?:merge|mergear|mesclar|incorporar|integrar)\b/i.test(text);
+  const repositoryScoped = text.includes(repo);
+  const exactPrScoped = new RegExp("\\bpr\\s*#?\\s*" + number + "\\b", "i").test(text);
+  const projectRepairScoped =
+    /\b(agent guardrail monitor|o guardiao)\b/i.test(text) &&
+    /\b(corrigir|consertar|reparar|fix|repair)\b/i.test(text);
+  const affirmative = /\b(merge|mergear|mesclar|incorporar|integrar|publicar|deploy)\b/i.test(text);
+  const negated = /\b(?:nao|nunca|never|do not|dont)\b.{0,40}\b(?:merge|mergear|mesclar|incorporar|integrar|publicar|deploy)\b/i.test(text);
+  const scoped = repositoryScoped && (exactPrScoped || projectRepairScoped);
   return scoped && affirmative && !negated;
 }
 
