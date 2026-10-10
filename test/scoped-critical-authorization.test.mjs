@@ -7,15 +7,13 @@ const policy = JSON.parse(fs.readFileSync(new URL("../policy/chatgpt.default.jso
 const repo = "odomdowell2030-crypto/lunna";
 const sha = "8947d13ee01a352d129d6406f46be08188aa6ff8";
 const labels = [
-  "owner-direct-order",
   "scope-confirmed",
-  "repository-permissions-verified",
   "ci-verified",
   "security-reviewed",
   "regression-tests-verified",
   "tenant-isolation-verified"
 ];
-const skills = [{ id: "software-repair", loaded: true, executed: true, executionProof: "reviewed-post-patch-ci-and-isolation" }];
+const skills = [{ id: "software-repair", loaded: true, executed: true, executionProof: "test-fixture-not-real-evidence" }];
 
 function decide({ objective = "Ordem expressa para incorporar PR 260 em odomdowell2030-crypto/lunna após homologação", command = `repository_full_name=${repo} pr_number=260 expected_head_sha=${sha}`, currentLabels = labels, currentSkills = skills, tool = "mcp__GitHub__merge_pull_request", kind = "merge_pull_request" } = {}) {
   return evaluatePolicy(policy, {
@@ -27,8 +25,8 @@ function decide({ objective = "Ordem expressa para incorporar PR 260 em odomdowe
   });
 }
 
-test("policy v4 is valid and keeps unmatched critical actions blocked", () => {
-  assert.equal(policy.version, 4);
+test("policy v5 is valid and keeps unmatched critical actions blocked", () => {
+  assert.equal(policy.version, 5);
   assert.equal(validatePolicy(policy).valid, true);
   assert.equal(policy.defaults.criticalUnmatched, "BLOCK");
 });
@@ -56,10 +54,11 @@ test("tenant isolation evidence is required for Lunna merges", () => {
   assert.equal(decide({ currentLabels: labels.filter((x) => x !== "tenant-isolation-verified") }).decision, "BLOCK");
 });
 
-test("direct owner order and security checks cannot be omitted", () => {
-  assert.equal(decide({ currentLabels: labels.filter((x) => x !== "owner-direct-order") }).decision, "BLOCK");
+test("scope, security, and CI evidence cannot be omitted", () => {
+  assert.equal(decide({ currentLabels: labels.filter((x) => x !== "scope-confirmed") }).decision, "BLOCK");
   assert.equal(decide({ currentLabels: labels.filter((x) => x !== "security-reviewed") }).decision, "BLOCK");
   assert.equal(decide({ currentLabels: labels.filter((x) => x !== "ci-verified") }).decision, "BLOCK");
+  assert.equal(decide({ currentLabels: labels.filter((x) => x !== "regression-tests-verified") }).decision, "BLOCK");
 });
 
 test("software repair evidence must exist before merge", () => {
