@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "policyId": "agm-chatgpt-default",
-  "version": 3,
+  "version": 4,
   "strict": true,
   "requireObjective": true,
   "defaults": {
@@ -16,8 +16,16 @@
       "status": "ACTIVE",
       "phase": "PRE_ACTION",
       "match": {
-        "runtime": ["chatgpt-mcp"],
-        "tool": ["Bash", "bash", "PowerShell", "powershell", "shell"],
+        "runtime": [
+          "chatgpt-mcp"
+        ],
+        "tool": [
+          "Bash",
+          "bash",
+          "PowerShell",
+          "powershell",
+          "shell"
+        ],
         "commandRegex": "(^|\\s)(rm\\s+-rf|Remove-Item\\s+.*-Recurse)(\\s|$)"
       },
       "effect": {
@@ -32,12 +40,24 @@
       "status": "ACTIVE",
       "phase": "PRE_ACTION",
       "match": {
-        "runtime": ["chatgpt-mcp"],
-        "tool": ["GitHub"],
-        "actionKind": ["merge_pull_request"],
+        "runtime": [
+          "chatgpt-mcp"
+        ],
+        "tool": [
+          "GitHub"
+        ],
+        "actionKind": [
+          "merge_pull_request"
+        ],
         "commandRegex": "PR #32.*150fbc02b8a58a52f7c5f08f26c2b5367e73a494.*deploy-v4-10-5-pronta",
         "objectiveRegex": "PR #32.*odomdowell2030-crypto/jurisboa.*deploy-v4-10-5-pronta",
-        "taskLabels": ["jurisboa", "PR-32", "production", "verified-fix", "user-approved"]
+        "taskLabels": [
+          "jurisboa",
+          "PR-32",
+          "production",
+          "verified-fix",
+          "user-approved"
+        ]
       },
       "effect": {
         "type": "REQUIRE_SKILL",
@@ -77,6 +97,105 @@
         "skill": "software-repair",
         "executionRequired": true,
         "reason": "Lunna PR #249 production merge requires a verified Software Repair Engineer execution."
+      }
+    },
+    {
+      "source": "USER",
+      "priority": "MANDATORY",
+      "status": "ACTIVE",
+      "phase": "PRE_ACTION",
+      "id": "CHATGPT-JURISBOA-NEON-EXACT-ANAM-SECRET-20261010",
+      "match": {
+        "runtime": [
+          "chatgpt-mcp"
+        ],
+        "tool": [
+          "mcp__Remote_Desktop_Commander__start_process"
+        ],
+        "actionKind": [
+          "delete_exact_neon_secret"
+        ],
+        "objectiveRegex": "^Jurisboa: excluir somente anam\\.api_key na tabela lunna\\.secrets$",
+        "commandRegex": "DELETE FROM lunna\\.secrets WHERE name = 'anam\\.api_key' RETURNING name",
+        "taskLabels": [
+          "jurisboa",
+          "Anam-HeyGen-only",
+          "verified",
+          "user-approved",
+          "20261010-cleanup"
+        ]
+      },
+      "effect": {
+        "type": "REQUIRE_SKILL",
+        "skill": "software-repair",
+        "executionRequired": true,
+        "reason": "Explicitly approved provider cleanup requires evidence from Software Repair Engineer; no other production modification is authorized."
+      }
+    },
+    {
+      "source": "USER",
+      "priority": "MANDATORY",
+      "status": "ACTIVE",
+      "phase": "PRE_ACTION",
+      "id": "CHATGPT-JURISBOA-RENDER-EXACT-LIVEAVATAR-20261010",
+      "match": {
+        "runtime": [
+          "chatgpt-mcp"
+        ],
+        "tool": [
+          "mcp__Remote_Desktop_Commander__start_process"
+        ],
+        "actionKind": [
+          "delete_exact_render_env"
+        ],
+        "objectiveRegex": "^Jurisboa: excluir somente LIVEAVATAR_API_KEY no serviço lunna$",
+        "commandRegex": "\\$targetName\\s*=\\s*'LIVEAVATAR_API_KEY'",
+        "taskLabels": [
+          "jurisboa",
+          "Anam-HeyGen-only",
+          "verified",
+          "user-approved",
+          "20261010-cleanup"
+        ]
+      },
+      "effect": {
+        "type": "REQUIRE_SKILL",
+        "skill": "software-repair",
+        "executionRequired": true,
+        "reason": "Explicitly approved provider cleanup requires evidence from Software Repair Engineer; no other production modification is authorized."
+      }
+    },
+    {
+      "source": "USER",
+      "priority": "MANDATORY",
+      "status": "ACTIVE",
+      "phase": "PRE_ACTION",
+      "id": "CHATGPT-JURISBOA-RENDER-EXACT-ANAM-AUDIT-20261010",
+      "match": {
+        "runtime": [
+          "chatgpt-mcp"
+        ],
+        "tool": [
+          "mcp__Remote_Desktop_Commander__start_process"
+        ],
+        "actionKind": [
+          "delete_exact_render_env"
+        ],
+        "objectiveRegex": "^Jurisboa: excluir somente LUNNA_ANAM_AUDIT_ON_START no serviço lunna$",
+        "commandRegex": "\\$targetName\\s*=\\s*'LUNNA_ANAM_AUDIT_ON_START'",
+        "taskLabels": [
+          "jurisboa",
+          "Anam-HeyGen-only",
+          "verified",
+          "user-approved",
+          "20261010-cleanup"
+        ]
+      },
+      "effect": {
+        "type": "REQUIRE_SKILL",
+        "skill": "software-repair",
+        "executionRequired": true,
+        "reason": "Explicitly approved provider cleanup requires evidence from Software Repair Engineer; no other production modification is authorized."
       }
     }
   ]
