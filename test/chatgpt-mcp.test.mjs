@@ -323,7 +323,7 @@ test("a direct order for PR 260 cannot authorize a different PR number", async (
       }
     });
     assert.equal(result.result.structuredContent.decision, "BLOCK");
-    assert.equal(result.result.structuredContent.code, "OWNER_ORDER_NOT_AFFIRMATIVE");
+    assert.equal(result.result.structuredContent.code, "CRITICAL_UNMATCHED");
   });
 });
 
