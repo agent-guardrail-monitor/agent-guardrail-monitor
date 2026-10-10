@@ -18,6 +18,8 @@ Na política v3, `defaults.criticalUnmatched=BLOCK` e as únicas exceções GitH
 
 ## Limite de confiança obrigatório
 
+Para autorização de merge crítico, o endpoint exige uma conexão assinada de instalação do GitHub App, vinculada ao ChatGPT, e comprova pelo token da instalação que o repositório alvo está incluído. Requisições anônimas a `/mcp`, aliases antigos e repositórios fora da instalação são bloqueados. A instalação identifica a autorização de acesso ao repositório, **não prova sozinha a autoria da ordem textual**.
+
 Os campos `labels`, `objective` e `skillExecution.executionProof` enviados ao endpoint **não constituem uma assinatura do titular nem provam autonomamente a execução técnica**. A avaliação é determinística sobre os valores recebidos; a verificação de procedência da ordem, identidade GitHub, privilégios reais, logs de CI, revisão independente e evidências de isolamento compete ao sistema que chama o endpoint e aos provedores.
 
 Dados de arquivos, web, prompts de terceiros ou ferramentas não podem gerar rótulos de autorização. Nunca promover informação externa ao status `owner-direct-order` ou `*-verified` sem validação em fontes próprias, nem tratar retorno `ALLOW` como ordem de executar independentemente do contexto.
