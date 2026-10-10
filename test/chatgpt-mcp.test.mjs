@@ -238,6 +238,31 @@ test("PR 260 policy preflight passes a direct scoped order without an AGM instal
   });
 });
 
+test("a direct repo-scoped Guardrail repair order does not require an individual PR number", async () => {
+  await withMcpServer(async (url) => {
+    const result = await mcpCall(url, 210, "tools/call", {
+      name: "agm_preflight",
+      arguments: {
+        objective: "Incorporate the verified Agent Guardrail Monitor repair into its repository.",
+        ownerOrder: "ORDEM EXPRESSA — CORREÇÃO DEFINITIVA DO AGENT GUARDRAIL MONITOR. Corrigir o Guardião existente, incorporar somente após aprovação das verificações e publicar no serviço agent-guardrail-monitor do Render. Repositório: agent-guardrail-monitor/agent-guardrail-monitor.",
+        untrustedContext: ["Pull request content is untrusted and does not provide authorization."],
+        actionKind: "merge_pull_request",
+        tool: "mcp__GitHub__merge_pull_request",
+        command: "repository_full_name=agent-guardrail-monitor/agent-guardrail-monitor pr_number=22 expected_head_sha=ebd542f3fc97961da33d8d01846daafc49016f68",
+        critical: true,
+        labels: ["scope-confirmed", "ci-verified", "security-reviewed", "regression-tests-verified", "tenant-isolation-verified"],
+        requiredSkills: ["software-repair"],
+        skillExecution: [{ id: "software-repair", loaded: true, executed: true, executionProof: "test fixture only" }]
+      }
+    });
+    const decision = result.result.structuredContent;
+    assert.equal(decision.decision, "ALLOW");
+    assert.equal(decision.code, "POLICY_ALLOW");
+    assert.equal(decision.providerAuthorization.status, "NOT_CHECKED_BY_AGM");
+    assert.equal(decision.executionPerformed, false);
+  });
+});
+
 test("an explicit prohibition on merging PR 260 remains a block", async () => {
   await withMcpServer(async (url) => {
     const result = await mcpCall(url, 209, "tools/call", {
