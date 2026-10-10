@@ -358,7 +358,7 @@ export function buildAgmMcpServer(context = {}) {
         });
       }
 
-      if (input.requiredTools.length && !input.requiredTools.includes(input.tool)) {
+      if (input.requiredTools.length && !input.requiredTools.map(canonicalToolId).includes(policyTool)) {
         return response({
           decision: VERDICTS.BLOCK,
           stage: "TOOL_RESOLUTION",
