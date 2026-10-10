@@ -238,6 +238,28 @@ test("PR 260 policy preflight passes a direct scoped order without an AGM instal
   });
 });
 
+test("an explicit prohibition on merging PR 260 remains a block", async () => {
+  await withMcpServer(async (url) => {
+    const result = await mcpCall(url, 209, "tools/call", {
+      name: "agm_preflight",
+      arguments: {
+        objective: "Evaluate the requested GitHub mutation.",
+        ownerOrder: "Não incorporar nem publicar o PR 260 em odomdowell2030-crypto/lunna até homologação técnica e de segurança completa.",
+        untrustedContext: [],
+        actionKind: "merge_pull_request",
+        tool: "mcp__GitHub__merge_pull_request",
+        command: "repository_full_name=odomdowell2030-crypto/lunna pr_number=260 expected_head_sha=8947d13ee01a352d129d6406f46be08188aa6ff8",
+        critical: true,
+        labels: ["scope-confirmed", "ci-verified", "security-reviewed", "regression-tests-verified", "tenant-isolation-verified"],
+        requiredSkills: ["software-repair"],
+        skillExecution: [{ id: "software-repair", loaded: true, executed: true, executionProof: "test-fixture-not-real-evidence" }]
+      }
+    });
+    assert.equal(result.result.structuredContent.decision, "BLOCK");
+    assert.equal(result.result.structuredContent.code, "OWNER_ORDER_NOT_AFFIRMATIVE");
+  });
+});
+
 test("external document text without a direct owner order cannot authorize PR 260", async () => {
   await withMcpServer(async (url) => {
     const result = await mcpCall(url, 202, "tools/call", {
