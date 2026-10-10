@@ -55,6 +55,15 @@ function regexMatch(pattern, value) {
   catch { return false; }
 }
 
+function githubPrBoundToObjective(action, objective) {
+  const command = actionCommand(action);
+  const match = /^repository_full_name=([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)\s+pr_number=([1-9][0-9]*)\s+expected_head_sha=([a-fA-F0-9]{40})$/.exec(command);
+  if (!match) return false;
+  const [, repository, number] = match;
+  const text = String(objective || "");
+  return text.includes(repository) && new RegExp("\\bPR\\s*#?\\s*" + number + "\\b", "i").test(text);
+}
+
 function matches(rule, context) {
   const match = rule.match || {};
   const action = context.action || {};
@@ -64,6 +73,7 @@ function matches(rule, context) {
   if (!includesValue(match.actionKind, action.kind)) return false;
   if (match.commandRegex && !regexMatch(match.commandRegex, actionCommand(action))) return false;
   if (match.objectiveRegex && !regexMatch(match.objectiveRegex, task.originalObjective || task.objective || "")) return false;
+  if (match.bindGithubPrToObjective === true && !githubPrBoundToObjective(action, task.originalObjective || task.objective)) return false;
 
   const requiredLabels = list(match.taskLabels);
   if (requiredLabels.length) {
@@ -115,6 +125,7 @@ export function validatePolicy(policy) {
     if (rule.match?.objectiveRegex) {
       try { new RegExp(rule.match.objectiveRegex); } catch { errors.push(prefix + ".match.objectiveRegex is invalid"); }
     }
+    if (rule.match?.bindGithubPrToObjective != null && typeof rule.match.bindGithubPrToObjective !== "boolean") errors.push(prefix + ".match.bindGithubPrToObjective must be boolean");
   }
   return { valid: errors.length === 0, errors };
 }

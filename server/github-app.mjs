@@ -806,6 +806,14 @@ async function auditHistory({
 }
 
 const auditApi = {
+  async authorizedRepository({ installationId, repository }) {
+    if (!installationId || !repository) return false;
+    const installed = await listInstallationRepositories(installationId);
+    return installed.repositories.some((item) =>
+      String(item?.full_name || "").toLowerCase() === String(repository).toLowerCase()
+    );
+  },
+
   async pending({ installationId, platform, repository }) {
     const history = await auditHistory({
       installationId,

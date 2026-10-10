@@ -279,6 +279,54 @@ export function buildAgmMcpServer(context = {}) {
         });
       }
 
+      // A critical merge may be evaluated only in a cryptographically linked
+      // GitHub App installation, not from arbitrary text posted to public /mcp.
+      if (input.critical && input.actionKind === "merge_pull_request") {
+        if (input.tool !== "mcp__GitHub__merge_pull_request") {
+          return response({
+            decision: VERDICTS.BLOCK,
+            stage: "AUTHORIZATION",
+            code: "CANONICAL_MERGE_TOOL_REQUIRED",
+            reasons: ["Legacy or unrecognized GitHub merge aliases cannot authorize a critical merge."]
+          });
+        }
+        if (!connectedAudit() || platform !== "chatgpt" ||
+            typeof auditApi?.authorizedRepository !== "function") {
+          return response({
+            decision: VERDICTS.BLOCK,
+            stage: "AUTHORIZATION",
+            code: "AUTHENTICATED_INSTALLATION_REQUIRED",
+            reasons: ["A critical merge requires a signed GitHub App installation context."]
+          });
+        }
+        const target = /^repository_full_name=([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)\s+pr_number=[1-9][0-9]*\s+expected_head_sha=[a-fA-F0-9]{40}$/.exec(input.command || "");
+        if (!target) {
+          return response({
+            decision: VERDICTS.BLOCK,
+            stage: "AUTHORIZATION",
+            code: "SCOPED_TARGET_REQUIRED",
+            reasons: ["Exact repository, PR number, and expected SHA are required."]
+          });
+        }
+        let installed = false;
+        try {
+          installed = await auditApi.authorizedRepository({
+            installationId,
+            repository: target[1]
+          }) === true;
+        } catch {
+          installed = false;
+        }
+        if (!installed) {
+          return response({
+            decision: VERDICTS.BLOCK,
+            stage: "AUTHORIZATION",
+            code: "REPOSITORY_INSTALLATION_NOT_VERIFIED",
+            reasons: ["The repository is not verified in the signed GitHub App installation."]
+          });
+        }
+      }
+
       if (input.requiredTools.length && !input.tool) {
         return response({
           decision: VERDICTS.BLOCK,
