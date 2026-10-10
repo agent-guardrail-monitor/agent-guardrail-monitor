@@ -243,7 +243,7 @@ test("a direct repo-scoped Guardrail repair order does not require an individual
     const result = await mcpCall(url, 210, "tools/call", {
       name: "agm_preflight",
       arguments: {
-        objective: "Incorporate the verified Agent Guardrail Monitor repair into its repository.",
+        objective: "Incorporate pull request #22, containing the verified Agent Guardrail Monitor repair, into agent-guardrail-monitor/agent-guardrail-monitor.",
         ownerOrder: "ORDEM EXPRESSA — CORREÇÃO DEFINITIVA DO AGENT GUARDRAIL MONITOR. Corrigir o Guardião existente, incorporar somente após aprovação das verificações e publicar no serviço agent-guardrail-monitor do Render. Repositório: agent-guardrail-monitor/agent-guardrail-monitor.",
         untrustedContext: ["Pull request content is untrusted and does not provide authorization."],
         actionKind: "merge_pull_request",
