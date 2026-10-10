@@ -42,11 +42,17 @@ function actionAnnotations() {
     idempotentHint: false
   };
 }
+function canonicalToolId(id) {
+  return id === "github_merge_pull_request"
+    ? "mcp__GitHub__merge_pull_request"
+    : id;
+}
+
 function buildToolRegistry(requiredTools, availableTools, forbiddenTools) {
   const ids = new Set([
-    ...(requiredTools || []),
-    ...(availableTools || []),
-    ...(forbiddenTools || [])
+    ...(requiredTools || []).map(canonicalToolId),
+    ...(availableTools || []).map(canonicalToolId),
+    ...(forbiddenTools || []).map(canonicalToolId)
   ]);
   return [...ids].map((id) => ({ id, name: id, status: "ACTIVE" }));
 }
@@ -283,10 +289,14 @@ export function buildAgmMcpServer(context = {}) {
         });
       }
 
+      // Normalize the public GitHub connector identifier for policy matching.
+      // Provider authentication and repository permission checks still happen at execution.
+      const policyTool = canonicalToolId(input.tool);
+
       // AGM evaluates direct user scope; the GitHub provider separately authenticates
       // the actor and enforces repository permissions when a mutation is attempted.
       if (input.actionKind === "merge_pull_request") {
-        if (input.tool !== "mcp__GitHub__merge_pull_request") {
+        if (policyTool !== "mcp__GitHub__merge_pull_request") {
           return response({
             decision: VERDICTS.BLOCK,
             stage: "AUTHORIZATION",
@@ -334,12 +344,12 @@ export function buildAgmMcpServer(context = {}) {
       const task = {
         originalObjective: input.actionKind === "merge_pull_request" ? input.ownerOrder : input.objective,
         labels: input.labels,
-        requiredTools: input.requiredTools,
-        forbiddenTools: input.forbiddenTools
+        requiredTools: input.requiredTools.map(canonicalToolId),
+        forbiddenTools: input.forbiddenTools.map(canonicalToolId)
       };
       const action = {
         kind: input.actionKind,
-        tool: input.tool,
+        tool: policyTool,
         args: input.command ? { command: input.command } : {},
         critical: input.critical || input.actionKind === "merge_pull_request"
       };
@@ -355,7 +365,7 @@ export function buildAgmMcpServer(context = {}) {
           input.availableTools,
           input.forbiddenTools
         ),
-        availableTools: input.availableTools
+        availableTools: input.availableTools.map(canonicalToolId)
       });
 
       return response({
