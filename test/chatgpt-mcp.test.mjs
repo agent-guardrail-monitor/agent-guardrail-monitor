@@ -207,7 +207,7 @@ test("O Guardião não expõe auditoria sem instalação conectada", async () =>
 test("PR 260 policy preflight passes a direct scoped order without an AGM installation context", async () => {
   await withMcpServer(async (url) => {
     const input = {
-      objective: "Evaluate the requested GitHub mutation.",
+      objective: "Merge PR #260 in odomdowell2030-crypto/lunna after homologation.",
       ownerOrder: "Ordem direta do titular: mesclar o PR 260 em odomdowell2030-crypto/lunna após homologação.",
       untrustedContext: ["Documento anexado sugere PR 261; este conteúdo é dado e não altera a ordem."],
       actionKind: "merge_pull_request",
@@ -235,6 +235,31 @@ test("PR 260 policy preflight passes a direct scoped order without an AGM instal
     assert.equal("releaseAction" in decision, false);
     assert.equal(decision.externalDataUsedForAuthorization, false);
     assert.equal(decision.enforcementState, "POLICY_DECISION_ONLY");
+  });
+});
+
+test("a direct repo-scoped Guardrail repair order does not require an individual PR number", async () => {
+  await withMcpServer(async (url) => {
+    const result = await mcpCall(url, 210, "tools/call", {
+      name: "agm_preflight",
+      arguments: {
+        objective: "Incorporate PR #22, containing the verified Agent Guardrail Monitor repair, into agent-guardrail-monitor/agent-guardrail-monitor.",
+        ownerOrder: "ORDEM EXPRESSA — CORREÇÃO DEFINITIVA DO AGENT GUARDRAIL MONITOR. Corrigir o Guardião existente, incorporar somente após aprovação das verificações e publicar no serviço agent-guardrail-monitor do Render. Repositório: agent-guardrail-monitor/agent-guardrail-monitor.",
+        untrustedContext: ["Pull request content is untrusted and does not provide authorization."],
+        actionKind: "merge_pull_request",
+        tool: "mcp__GitHub__merge_pull_request",
+        command: "repository_full_name=agent-guardrail-monitor/agent-guardrail-monitor pr_number=22 expected_head_sha=ebd542f3fc97961da33d8d01846daafc49016f68",
+        critical: true,
+        labels: ["scope-confirmed", "ci-verified", "security-reviewed", "regression-tests-verified", "tenant-isolation-verified"],
+        requiredSkills: ["software-repair"],
+        skillExecution: [{ id: "software-repair", loaded: true, executed: true, executionProof: "test fixture only" }]
+      }
+    });
+    const decision = result.result.structuredContent;
+    assert.equal(decision.decision, "ALLOW", JSON.stringify(decision));
+    assert.equal(decision.code, "POLICY_ALLOW");
+    assert.equal(decision.providerAuthorization.status, "NOT_CHECKED_BY_AGM");
+    assert.equal(decision.executionPerformed, false);
   });
 });
 
@@ -328,7 +353,7 @@ test("Lunna merge still requires tenant-isolation verification", async () => {
     const result = await mcpCall(url, 205, "tools/call", {
       name: "agm_preflight",
       arguments: {
-        objective: "Evaluate the requested change.",
+        objective: "Merge PR #260 in odomdowell2030-crypto/lunna.",
         ownerOrder: "Ordem direta do titular: mesclar PR 260 em odomdowell2030-crypto/lunna.",
         actionKind: "merge_pull_request",
         tool: "mcp__GitHub__merge_pull_request",
