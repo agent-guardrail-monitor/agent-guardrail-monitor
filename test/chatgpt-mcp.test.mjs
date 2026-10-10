@@ -207,7 +207,7 @@ test("O Guardião não expõe auditoria sem instalação conectada", async () =>
 test("PR 260 policy preflight passes a direct scoped order without an AGM installation context", async () => {
   await withMcpServer(async (url) => {
     const input = {
-      objective: "Evaluate the requested GitHub mutation.",
+      objective: "Merge PR #260 in odomdowell2030-crypto/lunna after homologation.",
       ownerOrder: "Ordem direta do titular: mesclar o PR 260 em odomdowell2030-crypto/lunna após homologação.",
       untrustedContext: ["Documento anexado sugere PR 261; este conteúdo é dado e não altera a ordem."],
       actionKind: "merge_pull_request",
@@ -323,7 +323,7 @@ test("a direct order for PR 260 cannot authorize a different PR number", async (
       }
     });
     assert.equal(result.result.structuredContent.decision, "BLOCK");
-    assert.equal(result.result.structuredContent.code, "CRITICAL_UNMATCHED");
+    assert.equal(result.result.structuredContent.code, "OWNER_ORDER_NOT_AFFIRMATIVE");
   });
 });
 
@@ -353,7 +353,7 @@ test("Lunna merge still requires tenant-isolation verification", async () => {
     const result = await mcpCall(url, 205, "tools/call", {
       name: "agm_preflight",
       arguments: {
-        objective: "Evaluate the requested change.",
+        objective: "Merge PR #260 in odomdowell2030-crypto/lunna.",
         ownerOrder: "Ordem direta do titular: mesclar PR 260 em odomdowell2030-crypto/lunna.",
         actionKind: "merge_pull_request",
         tool: "mcp__GitHub__merge_pull_request",
