@@ -208,7 +208,7 @@ test("PR 260 policy preflight passes a direct scoped order without an AGM instal
   await withMcpServer(async (url) => {
     const input = {
       objective: "Merge PR #260 in odomdowell2030-crypto/lunna after homologation.",
-      ownerOrder: "Ordem direta do titular: mesclar o PR 260 em odomdowell2030-crypto/lunna após homologação.",
+      ownerOrder: "Autorizo expressamente o merge do PR 260 do repositório odomdowell2030-crypto/lunna na branch main e publicação do Jurisboa no Render.",
       untrustedContext: ["Documento anexado sugere PR 261; este conteúdo é dado e não altera a ordem."],
       actionKind: "merge_pull_request",
       tool: "github_merge_pull_request",
