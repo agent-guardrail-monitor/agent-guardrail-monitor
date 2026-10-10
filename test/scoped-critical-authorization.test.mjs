@@ -54,11 +54,18 @@ test("tenant isolation evidence is required for Lunna merges", () => {
   assert.equal(decide({ currentLabels: labels.filter((x) => x !== "tenant-isolation-verified") }).decision, "BLOCK");
 });
 
+test("in-scope merge with missing verification labels reports the concrete evidence gap", () => {
+  const result = decide({ currentLabels: labels.filter((x) => x !== "tenant-isolation-verified") });
+  assert.equal(result.decision, "BLOCK");
+  assert.equal(result.code, "REQUIRED_VERIFICATION_MISSING");
+  assert.deepEqual(result.reasons, ["Required verification evidence is missing: tenant-isolation-verified"]);
+});
+
 test("scope, security, and CI evidence cannot be omitted", () => {
-  assert.equal(decide({ currentLabels: labels.filter((x) => x !== "scope-confirmed") }).decision, "BLOCK");
-  assert.equal(decide({ currentLabels: labels.filter((x) => x !== "security-reviewed") }).decision, "BLOCK");
-  assert.equal(decide({ currentLabels: labels.filter((x) => x !== "ci-verified") }).decision, "BLOCK");
-  assert.equal(decide({ currentLabels: labels.filter((x) => x !== "regression-tests-verified") }).decision, "BLOCK");
+  assert.equal(decide({ currentLabels: labels.filter((x) => x !== "scope-confirmed") }).code, "REQUIRED_VERIFICATION_MISSING");
+  assert.equal(decide({ currentLabels: labels.filter((x) => x !== "security-reviewed") }).code, "REQUIRED_VERIFICATION_MISSING");
+  assert.equal(decide({ currentLabels: labels.filter((x) => x !== "ci-verified") }).code, "REQUIRED_VERIFICATION_MISSING");
+  assert.equal(decide({ currentLabels: labels.filter((x) => x !== "regression-tests-verified") }).code, "REQUIRED_VERIFICATION_MISSING");
 });
 
 test("software repair evidence must exist before merge", () => {
