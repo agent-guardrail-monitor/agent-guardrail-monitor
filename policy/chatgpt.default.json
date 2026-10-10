@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "policyId": "agm-chatgpt-default",
-  "version": 3,
+  "version": 4,
   "strict": true,
   "requireObjective": true,
   "defaults": {
@@ -16,8 +16,16 @@
       "status": "ACTIVE",
       "phase": "PRE_ACTION",
       "match": {
-        "runtime": ["chatgpt-mcp"],
-        "tool": ["Bash", "bash", "PowerShell", "powershell", "shell"],
+        "runtime": [
+          "chatgpt-mcp"
+        ],
+        "tool": [
+          "Bash",
+          "bash",
+          "PowerShell",
+          "powershell",
+          "shell"
+        ],
         "commandRegex": "(^|\\s)(rm\\s+-rf|Remove-Item\\s+.*-Recurse)(\\s|$)"
       },
       "effect": {
@@ -32,12 +40,24 @@
       "status": "ACTIVE",
       "phase": "PRE_ACTION",
       "match": {
-        "runtime": ["chatgpt-mcp"],
-        "tool": ["GitHub"],
-        "actionKind": ["merge_pull_request"],
+        "runtime": [
+          "chatgpt-mcp"
+        ],
+        "tool": [
+          "GitHub"
+        ],
+        "actionKind": [
+          "merge_pull_request"
+        ],
         "commandRegex": "PR #32.*150fbc02b8a58a52f7c5f08f26c2b5367e73a494.*deploy-v4-10-5-pronta",
         "objectiveRegex": "PR #32.*odomdowell2030-crypto/jurisboa.*deploy-v4-10-5-pronta",
-        "taskLabels": ["jurisboa", "PR-32", "production", "verified-fix", "user-approved"]
+        "taskLabels": [
+          "jurisboa",
+          "PR-32",
+          "production",
+          "verified-fix",
+          "user-approved"
+        ]
       },
       "effect": {
         "type": "REQUIRE_SKILL",
@@ -77,6 +97,75 @@
         "skill": "software-repair",
         "executionRequired": true,
         "reason": "Lunna PR #249 production merge requires a verified Software Repair Engineer execution."
+      }
+    },
+    {
+      "id": "CHATGPT-OWNER-SCOPED-LUNNA-MERGE",
+      "source": "USER",
+      "priority": "MANDATORY",
+      "status": "ACTIVE",
+      "phase": "PRE_ACTION",
+      "match": {
+        "runtime": [
+          "chatgpt-mcp"
+        ],
+        "tool": [
+          "mcp__GitHub__merge_pull_request"
+        ],
+        "actionKind": [
+          "merge_pull_request"
+        ],
+        "commandRegex": "^repository_full_name=odomdowell2030-crypto/lunna\\s+pr_number=[1-9][0-9]*\\s+expected_head_sha=[a-fA-F0-9]{40}$",
+        "bindGithubPrToObjective": true,
+        "taskLabels": [
+          "owner-direct-order",
+          "scope-confirmed",
+          "repository-permissions-verified",
+          "ci-verified",
+          "security-reviewed",
+          "regression-tests-verified",
+          "tenant-isolation-verified"
+        ]
+      },
+      "effect": {
+        "type": "REQUIRE_SKILL",
+        "skill": "software-repair",
+        "executionRequired": true,
+        "reason": "Lunna merge requires owner-scoped PR, provider permission, CI, security, isolation, regression and repair evidence."
+      }
+    },
+    {
+      "id": "CHATGPT-OWNER-SCOPED-OTHER-REPO-MERGE",
+      "source": "USER",
+      "priority": "MANDATORY",
+      "status": "ACTIVE",
+      "phase": "PRE_ACTION",
+      "match": {
+        "runtime": [
+          "chatgpt-mcp"
+        ],
+        "tool": [
+          "mcp__GitHub__merge_pull_request"
+        ],
+        "actionKind": [
+          "merge_pull_request"
+        ],
+        "commandRegex": "^repository_full_name=(?:odomdowell2030-crypto/(?:jurisboa|wellington-studio)|agent-guardrail-monitor/agent-guardrail-monitor)\\s+pr_number=[1-9][0-9]*\\s+expected_head_sha=[a-fA-F0-9]{40}$",
+        "bindGithubPrToObjective": true,
+        "taskLabels": [
+          "owner-direct-order",
+          "scope-confirmed",
+          "repository-permissions-verified",
+          "ci-verified",
+          "security-reviewed",
+          "regression-tests-verified"
+        ]
+      },
+      "effect": {
+        "type": "REQUIRE_SKILL",
+        "skill": "software-repair",
+        "executionRequired": true,
+        "reason": "Repository merge requires owner-scoped PR, provider permission, CI, security, regression and repair evidence."
       }
     }
   ]
