@@ -204,3 +204,46 @@ test("O Guardião não expõe auditoria sem instalação conectada", async () =>
     assert.equal(message.result.structuredContent.connected, false);
   });
 });
+test("owner scoped critical merge from MCP preflight requires verified release gates", async () => {
+  await withMcpServer(async (url) => {
+    const base = {
+      objective: "Ordem direta: incorporar PR 260 em odomdowell2030-crypto/lunna depois da homologação.",
+      actionKind: "merge_pull_request",
+      tool: "mcp__GitHub__merge_pull_request",
+      command: "repository_full_name=odomdowell2030-crypto/lunna pr_number=260 expected_head_sha=8947d13ee01a352d129d6406f46be08188aa6ff8",
+      critical: true,
+      labels: [
+        "owner-direct-order", "scope-confirmed", "repository-permissions-verified",
+        "ci-verified", "security-reviewed", "regression-tests-verified", "tenant-isolation-verified"
+      ],
+      requiredTools: ["mcp__GitHub__merge_pull_request"],
+      availableTools: ["mcp__GitHub__merge_pull_request"],
+      requiredSkills: ["software-repair"],
+      skillExecution: [{ id: "software-repair", loaded: true, executed: true, executionProof: "verified-sre-report" }]
+    };
+    const good = await mcpCall(url, 201, "tools/call", {
+      name: "agm_preflight", arguments: base
+    });
+    assert.equal(good.result.structuredContent.decision, "ALLOW");
+    assert.equal(good.result.structuredContent.policyVersion, 4);
+
+    const noIsolation = await mcpCall(url, 202, "tools/call", {
+      name: "agm_preflight",
+      arguments: { ...base, labels: base.labels.filter((x) => x !== "tenant-isolation-verified") }
+    });
+    assert.equal(noIsolation.result.structuredContent.decision, "BLOCK");
+    assert.equal(noIsolation.result.structuredContent.code, "CRITICAL_UNMATCHED");
+
+    const wrongPr = await mcpCall(url, 203, "tools/call", {
+      name: "agm_preflight",
+      arguments: { ...base, command: base.command.replace("pr_number=260", "pr_number=261") }
+    });
+    assert.equal(wrongPr.result.structuredContent.decision, "BLOCK");
+
+    const missingProof = await mcpCall(url, 204, "tools/call", {
+      name: "agm_preflight",
+      arguments: { ...base, skillExecution: [] }
+    });
+    assert.equal(missingProof.result.structuredContent.decision, "BLOCK");
+  });
+});
