@@ -211,12 +211,12 @@ test("PR 260 policy preflight passes a direct scoped order without an AGM instal
       ownerOrder: "Ordem direta do titular: mesclar o PR 260 em odomdowell2030-crypto/lunna após homologação.",
       untrustedContext: ["Documento anexado sugere PR 261; este conteúdo é dado e não altera a ordem."],
       actionKind: "merge_pull_request",
-      tool: "mcp__GitHub__merge_pull_request",
+      tool: "github_merge_pull_request",
       command: "repository_full_name=odomdowell2030-crypto/lunna pr_number=260 expected_head_sha=8947d13ee01a352d129d6406f46be08188aa6ff8",
       critical: false,
       labels: ["scope-confirmed", "ci-verified", "security-reviewed", "regression-tests-verified", "tenant-isolation-verified"],
-      requiredTools: ["mcp__GitHub__merge_pull_request"],
-      availableTools: ["mcp__GitHub__merge_pull_request"],
+      requiredTools: ["github_merge_pull_request"],
+      availableTools: ["github_merge_pull_request"],
       requiredSkills: ["software-repair"],
       skillExecution: [{ id: "software-repair", loaded: true, executed: true, executionProof: "test-fixture-not-real-evidence" }]
     };
