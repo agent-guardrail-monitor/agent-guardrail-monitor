@@ -283,10 +283,16 @@ export function buildAgmMcpServer(context = {}) {
         });
       }
 
+      // Normalize the public GitHub connector identifier for policy matching.
+      // Provider authentication and repository permission checks still happen at execution.
+      const policyTool = input.actionKind === "merge_pull_request" && input.tool === "github_merge_pull_request"
+        ? "mcp__GitHub__merge_pull_request"
+        : input.tool;
+
       // AGM evaluates direct user scope; the GitHub provider separately authenticates
       // the actor and enforces repository permissions when a mutation is attempted.
       if (input.actionKind === "merge_pull_request") {
-        if (input.tool !== "mcp__GitHub__merge_pull_request") {
+        if (policyTool !== "mcp__GitHub__merge_pull_request") {
           return response({
             decision: VERDICTS.BLOCK,
             stage: "AUTHORIZATION",
@@ -339,7 +345,7 @@ export function buildAgmMcpServer(context = {}) {
       };
       const action = {
         kind: input.actionKind,
-        tool: input.tool,
+        tool: policyTool,
         args: input.command ? { command: input.command } : {},
         critical: input.critical || input.actionKind === "merge_pull_request"
       };
